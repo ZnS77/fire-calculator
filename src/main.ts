@@ -48,21 +48,25 @@ function load(): void {
 // ---- 养老金 → 现金流事件 -------------------------------------------------
 /** 养老金依赖 FIRE 年龄，而 FIRE 年龄又依赖养老金 —— 迭代两轮取不动点。
  * 实测两轮即收敛：第一轮用无养老金的解当停缴年龄，第二轮用它重算。 */
+/** 返回 used：最终真正拿去求解的那份 input（已注入养老金事件）。
+ * 结论区的二次求解必须用它，否则口径和展示出来的 FIRE 年龄对不上。 */
 function solveWithPension(input: FireInput, pc: PensionCfg): {
-  res: SolveResult; pension: P.PensionResult | null;
+  res: SolveResult; pension: P.PensionResult | null; used: FireInput;
 } {
-  if (!pc.on) return { res: E.solve(input), pension: null };
+  if (!pc.on) return { res: E.solve(input), pension: null, used: input };
   let stopAge: number = E.solve(input).fireAge ?? input.currentAge;
   let pr = projectPension(input, pc, stopAge);
-  let res = E.solve({ ...input, events: [...input.events, ...pensionEvents(input, pc, pr, stopAge)] });
+  let used: FireInput = { ...input, events: [...input.events, ...pensionEvents(input, pc, pr, stopAge)] };
+  let res = E.solve(used);
   for (let i = 0; i < 2; i++) {
     const next = res.fireAge ?? stopAge;
     if (next === stopAge) break;
     stopAge = next;
     pr = projectPension(input, pc, stopAge);
-    res = E.solve({ ...input, events: [...input.events, ...pensionEvents(input, pc, pr, stopAge)] });
+    used = { ...input, events: [...input.events, ...pensionEvents(input, pc, pr, stopAge)] };
+    res = E.solve(used);
   }
-  return { res, pension: pr };
+  return { res, pension: pr, used };
 }
 
 function projectPension(input: FireInput, pc: PensionCfg, stopAge: number): P.PensionResult {
@@ -102,11 +106,11 @@ const fmtY = (v: number): string => cny(v);
 
 function render(): void {
   const { input, pension: pc } = st;
-  const { res, pension: pr } = solveWithPension(input, pc);
+  const { res, pension: pr, used } = solveWithPension(input, pc);
   const d = E.derive(input, res);
   const sim = res.sim;
 
-  renderVerdict(res, d, pr);
+  renderVerdict(res, d, pr, used);
   renderPensionOut(pr);
 
   C.assetPath($('c1'), $('t1'), {
@@ -150,7 +154,9 @@ function render(): void {
   save();
 }
 
-function renderVerdict(res: SolveResult, d: E.Derived, pr: P.PensionResult | null): void {
+function renderVerdict(
+  res: SolveResult, d: E.Derived, pr: P.PensionResult | null, used: FireInput
+): void {
   const box = $('verdict');
   const { input } = st;
   const sim = res.sim;
@@ -181,6 +187,18 @@ function renderVerdict(res: SolveResult, d: E.Derived, pr: P.PensionResult | nul
       `<b>${cny(d.fireNominal)}</b>今日购买力 ${cny(d.fireReal)}`);
     lines += line(`${input.deathAge} 岁时留下`,
       `<b>${cny(sim.endNominal)}</b>今日购买力 ${cny(sim.endReal)}`);
+    // 退休年龄按整年扫描，「刚好不够」和「够了」之间隔着一整年工资，跨过去必然
+    // 剩下一大笔。不解释的话用户会以为是应急金没生效 —— 顺便给个可操作的数字。
+    const surplus = (sim.endNominal as number) - (sim.targetNominal as number);
+    if (surplus > Math.max((sim.targetNominal as number) * 0.02, 1)) {
+      lines += line('为什么有剩余', res.reason === 'already'
+        ? `当前资产已超过撑到 ${input.deathAge} 岁所需`
+        : '退休年龄按整年取，最后一年工资全部变成了遗产');
+      const room = E.solveSpend(used, res.fireAge);
+      if (room !== null && room > (input.annualSpend as number) * 1.02) {
+        lines += line('可以多花', `年支出提到 <b>${cny(room)}</b>才刚好花完`);
+      }
+    }
     if (d.swr !== null && d.swrBench !== null) {
       const okSwr = d.swr <= d.swrBench;
       lines += line('首年提取率',

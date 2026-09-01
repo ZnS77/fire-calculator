@@ -448,6 +448,49 @@ console.log('\n[10] 养老金接入引擎');
               ' 岁，计入后 ' + withPension.fireAge + ' 岁');
 }
 
+console.log('\n[11] 反解「刚好花完」的年支出');
+{
+  // 整年扫描的 overshoot：收入越高，跨过那一年剩得越离谱
+  const inp: Partial<FireInput> = {
+    ...E.DEFAULTS, reserve: real(0), annualIncome: real(3000000)
+  };
+  const r = E.solve(inp);
+  ok('高收入 + 零应急金有解', r.fireAge !== null, 'fireAge=' + r.fireAge);
+
+  const room = E.solveSpend(inp, r.fireAge!);
+  ok('反解出一个数', room !== null);
+  ok('反解值高于当前年支出', room! > (inp.annualSpend as number),
+     `${Math.round(room!)} vs ${inp.annualSpend}`);
+
+  const s = E.simulate({ ...inp, annualSpend: real(room!) }, r.fireAge!);
+  ok('用反解值重跑仍然可行', s.ok === true);
+  // reserve = 0 时 targetNominal 也是 0，只能拿原来的剩余当分母：
+  // 这条断言说的是「那笔 overshoot 被吃掉了 99.9% 以上」
+  const surplus0 = (r.sim.endNominal as number) - (r.sim.targetNominal as number);
+  ok('终值收敛到应急金水位（剩余被吃干净）',
+     Math.abs(s.endNominal - s.targetNominal) / Math.max(1, surplus0) < 1e-3,
+     `${Math.round(s.endNominal)} vs ${Math.round(s.targetNominal)}，原剩余 ${Math.round(surplus0)}`);
+
+  // 应急金非零时可以直接看 |终值 − 水位| / 水位
+  const inp2: Partial<FireInput> = { ...inp, reserve: real(500000) };
+  const r2 = E.solve(inp2);
+  const room2 = E.solveSpend(inp2, r2.fireAge!);
+  const s2 = E.simulate({ ...inp2, annualSpend: real(room2!) }, r2.fireAge!);
+  ok('留应急金时也能反解', room2 !== null && room2 > (inp2.annualSpend as number));
+  ok('终值与应急金水位的相对差 < 1e-3',
+     Math.abs(s2.endNominal - s2.targetNominal) / (s2.targetNominal as number) < 1e-3,
+     `${Math.round(s2.endNominal)} vs ${Math.round(s2.targetNominal)}`);
+  ok('反解值仍是可行解（取 lo 侧）', s2.ok === true);
+
+  // 单调性的另一面：再多花一点点就不可行了
+  const over = E.simulate({ ...inp2, annualSpend: real(room2! * 1.01) }, r2.fireAge!);
+  ok('比反解值再多花 1% 就撑不住', over.ok === false);
+
+  // 当前支出在该退休年龄下本就不可行 → 解不出
+  ok('不可行的退休年龄返回 null',
+     E.solveSpend(inp2, inp2.currentAge as number) === null);
+}
+
 console.log('\n========================================');
 if (fails.length) {
   console.log('失败 ' + fails.length + ' / ' + count + ' 项：' + fails.join(', '));

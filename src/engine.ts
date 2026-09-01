@@ -258,6 +258,45 @@ export function solve(input: Partial<FireInput> | undefined): SolveResult {
 }
 
 /**
+ * 给定退休年龄，反解出「死亡时恰好只剩下应急金」的年支出（今日购买力口径）。
+ *
+ * 为什么需要它：solve() 按整年扫描退休年龄，「刚好不够」和「够了」之间隔着
+ * 一整年工资，跨过去必然 overshoot —— 收入越高剩得越离谱。这个函数把那笔
+ * 剩余翻译成一个可操作的数字：同样在这个年龄退休，其实每年可以花到多少。
+ *
+ * simulate(inp, retireAge).ok 关于 annualSpend 单调（花得越多越不 ok），
+ * 所以可以直接二分，不必像 solve() 那样线性扫描。
+ *
+ * 返回 null 表示解不出：当前支出在该退休年龄下本就不可行，或上界探测失败。
+ */
+export function solveSpend(
+  input: Partial<FireInput> | undefined, retireAge: number
+): RealCNY | null {
+  const inp = merge(input);
+  const at = (v: number): boolean => simulate({ ...inp, annualSpend: real(v) }, retireAge).ok;
+
+  let lo = inp.annualSpend as number;
+  if (!at(lo)) return null;                       // 连当前支出都撑不住，没有「多花」可言
+
+  // 翻倍探测上界。lo 可能是 0，此时翻倍不动，用 1 起步。
+  let hi = lo > 0 ? lo * 2 : 1;
+  let found = false;
+  for (let i = 0; i < 30; i++) {
+    if (!at(hi)) { found = true; break; }
+    lo = hi;
+    hi *= 2;
+  }
+  if (!found) return null;                        // 花多少都 ok（例如收入被算成无限大），不给结论
+
+  // 收敛到 lo 一侧，保证返回值本身仍然可行
+  for (let i = 0; i < 50 && (hi - lo) / Math.max(1, lo) >= 1e-6; i++) {
+    const mid = (lo + hi) / 2;
+    if (at(mid)) lo = mid; else hi = mid;
+  }
+  return real(lo);
+}
+
+/**
  * 安全提取率对照线，按退休年数动态取。
  * 4% 法则的前提只有 30 年（Bengen 1994 / Trinity 1998，美国 20 世纪数据）；
  * 40 岁退休活到 90 岁是 50 年，用 4% 是错的。ERN: "3.5% is the new 4%"。
