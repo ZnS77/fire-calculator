@@ -62,20 +62,19 @@
       <p class="sect-note" style="margin-bottom:10px">人的收入不是一路复利上涨，而是有峰值的倒 U 形。
         选一条最像你的曲线，或用简单模型自己填增长率。</p>
       <div id="incomePresets" class="preset-grid"></div>
-      <div id="simpleParams" style="display:none">
-    <div class="field">
-      <div class="flabel"><span>年收入增长率</span><span class="fval" id="v_incomeGrowth"></span></div>
-      <input type="range" id="r_incomeGrowth" min="0" max="12" step="0.5">
-      <label class="ck" style="margin-top:6px"><input type="checkbox" id="c_capIncome">45 岁后工资不再增长</label>
-    </div>
     <div class="field">
       <div class="flabel"><span>职业天花板（年收入上限）</span></div>
       <input type="text" id="i_incomeCeiling" inputmode="numeric">
       <label class="ck" style="margin-top:6px"><input type="checkbox" id="c_ceilingOn">启用天花板</label>
-      <div class="hint">按<b>今日购买力</b>填，模拟时随通胀保值。
-        没有天花板的复利在 20 年尺度上会给出荒谬的收入 ——
-        年薪 30 万按 4% 涨 30 年是 97 万，按 6% 是 172 万。这是模型最容易失真的地方。</div>
+      <label class="ck" style="margin-top:6px"><input type="checkbox" id="c_ceilingInflates">天花板随通胀上移</label>
+      <div class="hint" id="h_ceiling"></div>
     </div>
+      <div id="simpleParams" style="display:none">
+        <div class="field">
+          <div class="flabel"><span>年收入增长率</span><span class="fval" id="v_incomeGrowth"></span></div>
+          <input type="range" id="r_incomeGrowth" min="0" max="12" step="0.5">
+          <label class="ck" style="margin-top:6px"><input type="checkbox" id="c_capIncome">45 岁后工资不再增长</label>
+        </div>
       </div>
       <div id="curveParams" style="display:none">
         <div class="field">
@@ -293,9 +292,12 @@
 
   <section class="sect">
     <div class="eyebrow">明细</div><h2>逐年明细</h2>
+    <p class="sect-note">前五列都是<b>名义金额</b>（当年实际到手/花出的钱），
+      只有最后一列折算成今日购买力。所以你填的「今日购买力」参数
+      （年支出、职业天花板、应急金）在这张表里会显示成更大的数 —— 那是通胀，不是算错。</p>
     <div class="scroll" style="max-height:340px"><table><thead><tr>
       <th>年龄</th><th>收入</th><th>支出</th><th>其他现金流</th><th>投资收益</th>
-      <th>期末（名义）</th><th>期末（今日购买力）</th>
+      <th>期末</th><th>期末</th>
     </tr></thead><tbody id="tblBody"></tbody></table></div>
   </section>
 
@@ -311,5 +313,5 @@
   <span>模型与参数依据见仓库 <code>README.md</code> 与 <code>docs/</code>。数据仅存于本地浏览器。</span>
 </div>
 </div><!-- /wrap -->
-<script src="js/app.js?v=448a4c4f"></script>
+<script src="js/app.js?v=a532b8b1"></script>
 </body></html>

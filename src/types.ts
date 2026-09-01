@@ -90,6 +90,11 @@ export interface FireInput {
    * 模拟时按基础通胀保值（天花板本身也会随物价上移，但不再有实际增长）。
    * null = 无上限。没有天花板的复利在 20 年尺度上会给出荒谬的收入。 */
   incomeCeiling: RealCNY | null;
+  /** 天花板是否随通胀上移。
+   * true  = 天花板按今日购买力理解，名义值逐年上移（职级对应的实际购买力不变）
+   * false = 天花板是一个固定的名义数字（「我这辈子最多赚到 80 万」的字面意思），
+   *         实际购买力会被通胀一年年吃掉 —— 更悲观，但也更接近很多人的真实处境 */
+  incomeCeilingInflates: boolean;
   /** 收入模型。'simple' 用 incomeGrowth + capIncomeGrowthAt + incomeCeiling；
    * 'curve' 用生命周期曲线，此时上面三个参数不参与形状，只有 realWageGrowth 叠加。 */
   incomeModel: IncomeModel;

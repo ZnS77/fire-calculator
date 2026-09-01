@@ -53,6 +53,7 @@ export const DEFAULTS: FireInput = {
   incomeGrowth: rate(0.04),
   capIncomeGrowthAt: 45,
   incomeCeiling: real(800000),
+  incomeCeilingInflates: true,
   incomeModel: { kind: 'simple' },
   realWageGrowth: rate(0.015),
   annualSpend: real(120000),
@@ -124,21 +125,28 @@ function eventFlow(events: CashEvent[], a: number, t: number): NominalCNY {
 function incomeAt(inp: FireInput, a: number, t: number, retireAge: number): NominalCNY {
   if (a >= retireAge) return nominal(0);
 
+  let v: number;
   if (inp.incomeModel.kind === 'curve') {
     const c = inp.incomeModel.curve;
     const base = incomeCurveAt(c, inp.currentAge);
     const shape = base > 0 ? incomeCurveAt(c, a) / base : 1;
-    return nominal(inp.annualIncome * shape
-      * Math.pow(1 + inp.realWageGrowth, t)
-      * Math.pow(1 + inp.cpi, t));
+    v = inp.annualIncome * shape * Math.pow(1 + inp.realWageGrowth, t)
+        * Math.pow(1 + inp.cpi, t);
+  } else {
+    const cap = inp.capIncomeGrowthAt === null
+      ? t
+      : Math.min(t, Math.max(0, inp.capIncomeGrowthAt - inp.currentAge));
+    v = inp.annualIncome * Math.pow(1 + inp.incomeGrowth, cap);
   }
 
-  const cap = inp.capIncomeGrowthAt === null
-    ? t
-    : Math.min(t, Math.max(0, inp.capIncomeGrowthAt - inp.currentAge));
-  let v = inp.annualIncome * Math.pow(1 + inp.incomeGrowth, cap);
+  // 职业天花板对两种模型都生效 —— 它是「这个人的职业上限」，与选哪个模型无关。
+  // 曲线模式尤其需要：realWageGrowth 与 CPI 一直复利，会压过峰值后的衰减，
+  // 让收入无限上涨，所谓「峰值」在结果里根本看不见。
   if (inp.incomeCeiling !== null) {
-    v = Math.min(v, inp.incomeCeiling * Math.pow(1 + inp.cpi, t));
+    const ceil = inp.incomeCeilingInflates
+      ? inp.incomeCeiling * Math.pow(1 + inp.cpi, t)   // 今日购买力口径
+      : (inp.incomeCeiling as number);                 // 固定名义值
+    v = Math.min(v, ceil);
   }
   return nominal(v);
 }

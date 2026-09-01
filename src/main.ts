@@ -144,6 +144,7 @@ function render(): void {
   renderTable(sim);
   renderSaveRate();
   renderRetireSpend();
+  renderCeiling();
   renderCurveNote();
   renderBlockSummaries();
   save();
@@ -240,6 +241,38 @@ function renderCurveNote(): void {
     `按这条曲线，你在 <b>${c.peakAge} 岁</b>达到收入峰值 ` +
     `<b>${cny(atPeak)}</b>（今日购买力），现在是 ${cny(now)}。` +
     `<br>曲线本身已剔除通胀与全社会工资增长 —— 它描述的是你相对同龄同行的位置。`;
+}
+
+/** 天花板是「今日购买力」，但逐年明细显示的是名义值 —— 两者对不上时
+ * 用户会以为天花板没生效。这里把换算显式打出来。 */
+function renderCeiling(): void {
+  const box = document.getElementById('h_ceiling');
+  if (!box) return;
+  const c = st.input.incomeCeiling;
+  if (c === null) {
+    box.innerHTML = '未启用。没有天花板的复利在 20 年尺度上会给出荒谬的收入 —— ' +
+      '年薪 30 万按 4% 涨 30 年是 97 万，按 6% 是 172 万。这是模型最容易失真的地方。';
+    return;
+  }
+  if (st.input.incomeCeilingInflates) {
+    const rows = [10, 20, 30].map(n => {
+      const nom = (c as number) * Math.pow(1 + st.input.cpi, n);
+      return `${st.input.currentAge + n} 岁 ${cny(nom)}`;
+    }).join(' · ');
+    box.innerHTML =
+      `当前按<b>今日购买力</b>理解：职级对应的实际购买力不变，名义天花板逐年上移。<br>` +
+      `所以「逐年明细」里的收入会停在这些<b>名义</b>值上：${rows}。<br>` +
+      `<span style="color:var(--ink2)">看到比 ${cny(c)} 大不是没生效，是通胀。</span>`;
+  } else {
+    const n = 30;
+    const realAt = (c as number) / Math.pow(1 + st.input.cpi, n);
+    box.innerHTML =
+      `当前是<b>固定名义值</b>：收入永远不超过 ${cny(c)} 这个数字本身，` +
+      `实际购买力被通胀一年年吃掉 —— ${st.input.currentAge + n} 岁时它只相当于今天的 ` +
+      `<b>${cny(realAt)}</b>。<br>` +
+      `<span style="color:var(--ink2)">更悲观，但接近很多人的真实处境：` +
+      `名义工资停涨之后，购买力是一直在退的。</span>`;
+  }
 }
 
 function renderRetireSpend(): void {
@@ -753,6 +786,10 @@ function boot(): void {
     ceilOn.checked = on;
     ceilIn.disabled = !on;
     ceilIn.style.opacity = on ? '1' : '.45';
+    const inf = $<HTMLInputElement>('c_ceilingInflates');
+    inf.checked = st.input.incomeCeilingInflates;
+    inf.disabled = !on;
+    (inf.parentElement as HTMLElement).style.opacity = on ? '1' : '.45';
     if (on) ceilIn.value = cnyFull(st.input.incomeCeiling as number).replace('¥', '');
   };
   ceilOn.addEventListener('change', () => {
@@ -763,6 +800,11 @@ function boot(): void {
   });
   ceilIn.addEventListener('change', () => {
     st.input.incomeCeiling = real(parseAmount(ceilIn.value));
+    syncCeil(); schedule();
+  });
+  const ceilInf = $<HTMLInputElement>('c_ceilingInflates');
+  ceilInf.addEventListener('change', () => {
+    st.input.incomeCeilingInflates = ceilInf.checked;
     syncCeil(); schedule();
   });
   ceilIn.addEventListener('focus', () => {

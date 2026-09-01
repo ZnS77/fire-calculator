@@ -20,7 +20,8 @@ function flat(over: Partial<FireInput> = {}): Partial<FireInput> {
     annualIncome: real(300000), incomeGrowth: rate(0), capIncomeGrowthAt: null,
     annualSpend: real(120000), cpi: rate(0), personalInflation: rate(0),
     medInflation: rate(0), rWork: rate(0), rRetire: rate(0), reserve: real(0),
-    smileOn: false, events: [], incomeCeiling: null, retireSpendRatio: rate(1),
+    smileOn: false, events: [], incomeCeiling: null, incomeCeilingInflates: true,
+    retireSpendRatio: rate(1),
     incomeModel: { kind: 'simple' as const }, realWageGrowth: rate(0), ...over
   };
 }
@@ -329,6 +330,61 @@ console.log('\n[8] 职业天花板');
      infl.rows[25]!.income < 300000 * Math.pow(1.06, 25),
      'got ' + Math.round(infl.rows[25]!.income));
   ok('退休后收入恒为 0', ceil.rows[35]!.income === 0);
+}
+
+console.log('\n[8b] 职业天花板对曲线模式同样生效（曾只在 simple 模式生效）');
+{
+  const c = { entryAge: 22, peakAge: 45, peakMult: 2.5,
+              declineRate: rate(0.01), floorRatio: null };
+  const base = {
+    currentAge: age(30), deathAge: age(80), assets: real(0),
+    annualIncome: real(300000), annualSpend: real(0), cpi: rate(0.015),
+    personalInflation: rate(0.025), medInflation: rate(0), rWork: rate(0),
+    rRetire: rate(0), reserve: real(0), smileOn: false, events: [],
+    retireSpendRatio: rate(1), realWageGrowth: rate(0.015),
+    incomeModel: { kind: 'curve' as const, preset: 'standard', curve: c }
+  };
+  const noCeil = E.simulate({ ...base, incomeCeiling: null }, 80);
+  const ceil = E.simulate({ ...base, incomeCeiling: real(500000) }, 80);
+
+  ok('曲线模式下天花板生效（曾完全不生效）',
+     ceil.rows[30]!.income < noCeil.rows[30]!.income,
+     `${Math.round(ceil.rows[30]!.income)} vs ${Math.round(noCeil.rows[30]!.income)}`);
+  ok('曲线模式收入被钳在 天花板×(1+CPI)^t',
+     near(ceil.rows[30]!.income, 500000 * Math.pow(1.015, 30), 1),
+     'got ' + Math.round(ceil.rows[30]!.income));
+  ok('未触及天花板时曲线不受影响',
+     near(ceil.rows[2]!.income, noCeil.rows[2]!.income, 1e-6));
+
+  // 没有天花板时，realWageGrowth + CPI 会压过峰后衰减，收入无限上涨
+  const late = noCeil.rows.map(r => r.income as number);
+  ok('无天花板时收入在个人峰值后仍持续上涨（这正是高估的来源）',
+     late[45]! > late[15]!,
+     `60岁 ${Math.round(late[45]!)} > 45岁 ${Math.round(late[15]!)}`);
+  ok('加了天花板后不再无限上涨',
+     near(ceil.rows[45]!.income / ceil.rows[35]!.income, Math.pow(1.015, 10), 1e-6));
+
+  // simple 模式行为不变
+  const sim = E.simulate({ ...base, incomeModel: { kind: 'simple' },
+    incomeGrowth: rate(0.04), capIncomeGrowthAt: null, incomeCeiling: real(500000) }, 80);
+  ok('simple 模式天花板照旧生效',
+     near(sim.rows[30]!.income, 500000 * Math.pow(1.015, 30), 1));
+
+  // 固定名义值口径：不随通胀上移
+  const fixed = E.simulate({ ...base, incomeCeiling: real(500000),
+    incomeCeilingInflates: false }, 80);
+  ok('关闭「随通胀上移」后天花板是固定名义值',
+     near(fixed.rows[30]!.income, 500000, 1e-6), 'got ' + Math.round(fixed.rows[30]!.income));
+  ok('固定名义值比随通胀上移更严格', fixed.rows[30]!.income < ceil.rows[30]!.income);
+  ok('固定名义值下收入触顶后不再变化',
+     near(fixed.rows[30]!.income, fixed.rows[45]!.income, 1e-6));
+  ok('两种口径在 t=0 相同',
+     near(fixed.rows[0]!.income, ceil.rows[0]!.income, 1e-6));
+  ok('固定名义值推迟 FIRE（实际购买力被通胀吃掉）',
+     (E.solve({ ...base, reserve: real(3000000), incomeCeiling: real(500000),
+        incomeCeilingInflates: false }).fireAge ?? 99) >=
+     (E.solve({ ...base, reserve: real(3000000), incomeCeiling: real(500000),
+        incomeCeilingInflates: true }).fireAge ?? 99));
 }
 
 console.log('\n[9] 养老金：工资封顶必须传进来（曾漏传，导致指数虚高）');
