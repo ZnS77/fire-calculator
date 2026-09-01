@@ -1,0 +1,35 @@
+js/app.js
+  s_1ee74ed282fa49::t_343bed888e1905 1,93,97,99,103,111,113-124,126-128
+src/types.ts
+  s_1ee74ed282fa49::t_39c4b656a40861 93-97
+src/test.ts
+  s_1ee74ed282fa49::t_00576ac16bc365 372-387
+  s_1ee74ed282fa49::t_39c4b656a40861 23-24
+  s_1ee74ed282fa49::t_e94a8c966d569b 335-371,388-389
+index.html
+  s_1ee74ed282fa49::t_89c12bbfd5a46d 69,72-77
+  s_1ee74ed282fa49::t_6e61c9f12893f5 70,295-297,300
+  s_1ee74ed282fa49::t_343bed888e1905 316
+src/engine.ts
+  s_1ee74ed282fa49::t_39c4b656a40861 56,146-149
+  s_1ee74ed282fa49::t_bf7a5635342e24 128,133-139,142-144
+src/main.ts
+  s_1ee74ed282fa49::t_39c4b656a40861 257-277,789-792,805-807
+  s_1ee74ed282fa49::t_6e61c9f12893f5 147,246-256
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "97937cbc149243eb95fa0ef4c6bfa820c239d72b",
+  "prompts": {},
+  "sessions": {
+    "s_1ee74ed282fa49": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f46c9b84-6438-432a-9452-9431d500bb5d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "eurika.zhou <eurika.zhou@nio.com>"
+    }
+  }
+}
