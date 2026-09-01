@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
-<link rel="stylesheet" href="css/style.css?v=4ce1501f">
+<link rel="stylesheet" href="css/style.css?v=2ceff0eb">
 </head><body>
 <div class="wrap">
 <header>
@@ -130,16 +130,16 @@
     <summary><span class="blk-t"><span class="eyebrow">假设</span><span class="blk-h">市场假设</span></span><span class="blk-sum" data-blk="市场假设"></span></summary>
     <div class="blk-body">
     <div class="field">
-      <div class="flabel"><span>积累期收益率 <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="沪深300全收益 近20年 9.04%，但近10年仅 3.32%；滚动10年年化中位 6.65%，区间 −1.07%~+16.80%。债端当前起点仅 1.68%。">i</button></span><span class="fval" id="v_rWork"></span></div>
+      <div class="flabel"><span>积累期收益率 <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="默认 4% 是保守档。沪深300全收益近20年 9.04%，但近10年仅 3.32%；滚动10年年化中位 6.65%，区间 −1.07%~+16.80%。而债端当前起点只有 1.68%，所以历史均值不可直接外推。&lt;br&gt;注意：调高收益率时通常也要调高通胀，两者不是独立的。">i</button></span><span class="fval" id="v_rWork"></span></div>
       <input type="range" id="r_rWork" min="0" max="12" step="0.25">
     </div>
     <div class="field">
-      <div class="flabel"><span>退休期收益率 <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="中证全债 近20年 4.87%，但当前 10Y 国债仅 1.68%。30/70 组合滚动10年中位 6.04%，需向下修正。">i</button></span><span class="fval" id="v_rRetire"></span></div>
+      <div class="flabel"><span>退休期收益率 <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="默认 3% 对应当前的低利率环境：10Y 国债 1.68%、3年期大额存单 1.55%–2.15%、货基七日年化 1.0%–1.2%。中证全债近20年 4.87% 是过去二十年降息周期的结果，起点已经不同了。">i</button></span><span class="fval" id="v_rRetire"></span></div>
       <input type="range" id="r_rRetire" min="0" max="12" step="0.25">
       <div class="hint">退休后通常降低权益比重，所以这一档一般低于积累期。</div>
     </div>
     <div class="field">
-      <div class="flabel"><span>个人通胀（年支出增长） <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="中国CPI 近20年 2.25%，近10年 1.58%，近三年已贴近 0。FIRE 人群支出偏服务与医疗，涨幅高于 CPI 篮子，故加 1pp 个人溢价。">i</button></span><span class="fval" id="v_personalInflation"></span></div>
+      <div class="flabel"><span>个人通胀（年支出增长） <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="默认 2.5% = CPI 1.5% + 1pp 个人溢价。中国 CPI 近20年 2.25%、近10年 1.58%、近三年 0.24/0.22/0.06% 已贴近零。FIRE 人群支出偏服务与医疗，涨幅高于 CPI 篮子。&lt;br&gt;真正决定结果的是**实际**收益率（收益率 ÷ 通胀），不是名义值 —— 两个一起调才有意义。">i</button></span><span class="fval" id="v_personalInflation"></span></div>
       <input type="range" id="r_personalInflation" min="0" max="8" step="0.1">
     </div>
     <div class="field">
@@ -147,7 +147,7 @@
       <input type="range" id="r_medInflation" min="0" max="12" step="0.25">
     </div>
     <div class="field">
-      <div class="flabel"><span>基础 CPI（折现展示用） <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="仅用于把名义金额折算成今日购买力显示，不影响支出增长。">i</button></span><span class="fval" id="v_cpi"></span></div>
+      <div class="flabel"><span>基础 CPI（折现展示用） <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="仅用于把名义金额折算成今日购买力显示，不影响支出增长。默认 1.5% 取中国 CPI 近 10 年几何均值 1.58%。">i</button></span><span class="fval" id="v_cpi"></span></div>
       <input type="range" id="r_cpi" min="0" max="6" step="0.1">
     </div>
   </div></details>
@@ -311,5 +311,5 @@
   <span>模型与参数依据见仓库 <code>README.md</code> 与 <code>docs/</code>。数据仅存于本地浏览器。</span>
 </div>
 </div><!-- /wrap -->
-<script src="js/app.js?v=8b42e911"></script>
+<script src="js/app.js?v=448a4c4f"></script>
 </body></html>

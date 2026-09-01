@@ -57,11 +57,16 @@ export const DEFAULTS: FireInput = {
   realWageGrowth: rate(0.015),
   annualSpend: real(120000),
   retireSpendRatio: rate(1.0),
-  cpi: rate(0.022),
-  personalInflation: rate(0.032),
-  medInflation: rate(0.06),
-  rWork: rate(0.06),
-  rRetire: rate(0.045),
+  // 默认取「低利率世界」的一组自洽假设，理由见 docs/参数依据.md：
+  // 当前 10Y 国债约 1.68%、大额存单 1.55%–2.15%、货基 1.0%–1.2%，
+  // 原来的 6%/4.5% 偏乐观。但降收益率就必须同时降通胀 ——
+  // 今天利率低本身就部分反映了通胀低（CPI 近三年 0.24/0.22/0.06%）。
+  // 只降一边等于假设「低利率 + 高通胀」的滞胀世界，退休期实际收益会变成负数。
+  cpi: rate(0.015),              // 中国 CPI 近 10 年几何均值 1.58%
+  personalInflation: rate(0.025),// = CPI + 1pp 个人溢价
+  medInflation: rate(0.06),      // 医疗与整体物价脱钩，不随利率环境调整
+  rWork: rate(0.04),
+  rRetire: rate(0.03),
   reserve: real(500000),
   smileOn: true,
   phases: [
