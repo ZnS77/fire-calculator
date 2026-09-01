@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
-<link rel="stylesheet" href="css/style.css?v=2ceff0eb">
+<link rel="stylesheet" href="css/style.css?v=7a0f1ad9">
 </head><body>
 <div class="wrap">
 <header>
@@ -18,7 +18,14 @@
     <h1>FIRE 计算器</h1>
     <div class="sub">按你现在的存钱速度，最早哪一年能不干了 — 并且撑到最后还留得下救命钱</div>
   </div>
-  <button id="themeBtn" title="切换主题">◐</button>
+  <div class="hdr-act">
+    <a class="starlink" href="https://github.com/ZnS77/fire-calculator" target="_blank" rel="noopener noreferrer"
+       title="在 GitHub 上给这个项目点个 Star">
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      <span>点个 Star</span>
+    </a>
+    <button id="themeBtn" title="切换主题">◐</button>
+  </div>
 </header>
 
 <div id="verdict" class="verdict"></div>
@@ -310,7 +317,8 @@
 
 <div class="foot">
   <span id="selftest"></span>
-  <span>模型与参数依据见仓库 <code>README.md</code> 与 <code>docs/</code>。数据仅存于本地浏览器。</span>
+  <span>模型与参数依据见仓库 <code>README.md</code> 与 <code>docs/</code>。数据仅存于本地浏览器。
+    觉得有用就去 <a class="foot-star" href="https://github.com/ZnS77/fire-calculator" target="_blank" rel="noopener noreferrer">GitHub 点个 Star ★</a></span>
 </div>
 </div><!-- /wrap -->
 <script src="js/app.js?v=c13eebe0"></script>
