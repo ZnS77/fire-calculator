@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="按你现在的存钱速度，最早哪一年可以不干了 —— 并且撑到最后还留得下救命钱。退休年龄是解出来的，死亡年龄可调，死后须留下应急金。">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#eef1f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0e11" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%230f1519%27/%3E%3Cpath d=%27M5 25 C11 25 13 9 17 9 C22 9 22 17 27 17%27 fill=%27none%27 stroke=%27%232a78d6%27 stroke-width=%273%27 stroke-linecap=%27round%27/%3E%3Ccircle cx=%2717%27 cy=%279%27 r=%273%27 fill=%27%23eb6834%27/%3E%3C/svg%3E">
+<title>FIRE 计算器</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<link rel="stylesheet" href="css/style.css?v=fd8d7d78">
+</head><body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>FIRE 计算器</h1>
+    <div class="sub">按你现在的存钱速度，最早哪一年能不干了 — 并且撑到最后还留得下救命钱</div>
+  </div>
+  <button id="themeBtn" title="切换主题">◐</button>
+</header>
+
+<div id="verdict" class="verdict"></div>
+
+<div class="layout">
+<!-- ================= 左：控制轨 ================= -->
+<div class="rail">
+  <details class="blk" open>
+    <summary><span class="blk-t"><span class="eyebrow">现状</span><span class="blk-h">我的基本情况</span></span><span class="blk-sum" data-blk="我的基本情况"></span></summary>
+    <div class="blk-body">
+    <div class="field">
+      <div class="flabel"><span>当前年龄</span><span class="fval" id="v_currentAge"></span></div>
+      <input type="range" id="r_currentAge" min="18" max="70" step="1">
+    </div>
+    <div class="field">
+      <div class="flabel"><span>当前净资产</span></div>
+      <input type="text" id="i_assets" inputmode="numeric">
+      <div class="hint">可直接输入 <code>50w</code> / <code>500k</code> / <code>1.2m</code></div>
+    </div>
+    <div class="field">
+      <div class="flabel"><span>税后年收入</span></div>
+      <input type="text" id="i_annualIncome" inputmode="numeric">
+      <div class="hint">填<b>年均水平</b>，别填某个特别好的年份。收入曲线是按这个值等比缩放的，
+        填高了整条曲线都会被抬起来。</div>
+    </div>
+    <div class="field">
+      <div class="flabel"><span>年收入增长率</span><span class="fval" id="v_incomeGrowth"></span></div>
+      <input type="range" id="r_incomeGrowth" min="0" max="12" step="0.5">
+      <label class="ck" style="margin-top:6px"><input type="checkbox" id="c_capIncome">45 岁后工资不再增长</label>
+    </div>
+    <div class="field">
+      <div class="flabel"><span>职业天花板（年收入上限）</span></div>
+      <input type="text" id="i_incomeCeiling" inputmode="numeric">
+      <label class="ck" style="margin-top:6px"><input type="checkbox" id="c_ceilingOn">启用天花板</label>
+      <div class="hint">按<b>今日购买力</b>填，模拟时随通胀保值。
+        没有天花板的复利在 20 年尺度上会给出荒谬的收入 ——
+        年薪 30 万按 4% 涨 30 年是 97 万，按 6% 是 172 万。这是模型最容易失真的地方。</div>
+    </div>
+    <div class="field">
+      <div class="flabel"><span>当前年支出</span></div>
+      <input type="text" id="i_annualSpend" inputmode="numeric">
+      <div class="hint" id="h_saverate"></div>
+    </div>
+    <div class="field">
+      <div class="flabel"><span>退休后花多少 <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="退休后支出未必等于现在。通勤、房贷、育儿、社保个人部分往往消失，但旅行和医疗会增加。这是一次性的水平位移，与「支出微笑曲线」的逐年漂移相互独立、可以叠加。">i</button></span><span class="fval" id="v_retireSpendRatio"></span></div>
+      <input type="range" id="r_retireSpendRatio" min="30" max="150" step="5">
+      <div class="hint" id="h_retireSpend"></div>
+    </div>
+  </div></details>
+
+  <details class="blk">
+    <summary><span class="blk-t"><span class="eyebrow">假设</span><span class="blk-h">收入模型</span></span><span class="blk-sum" data-blk="收入模型"></span></summary>
+    <div class="blk-body">
+      <p class="sect-note" style="margin-bottom:10px">人的收入不是一路复利上涨，而是有峰值的倒 U 形。
+        选一条最像你的曲线，或用简单模型自己填增长率。</p>
+      <div id="incomePresets" class="preset-grid"></div>
+      <div id="curveParams" style="display:none">
+        <div class="field">
+          <div class="flabel"><span>峰值年龄</span><span class="fval" id="v_peakAge"></span></div>
+          <input type="range" id="r_peakAge" min="28" max="60" step="1">
+        </div>
+        <div class="field">
+          <div class="flabel"><span>峰值收入 / 起薪</span><span class="fval" id="v_peakMult"></span></div>
+          <input type="range" id="r_peakMult" min="1.1" max="6" step="0.1">
+        </div>
+        <div class="field">
+          <div class="flabel"><span>峰值后年降幅</span><span class="fval" id="v_declineRate"></span></div>
+          <input type="range" id="r_declineRate" min="0" max="6" step="0.25">
+        </div>
+        <div class="field">
+          <div class="flabel"><span>全社会实际工资增长 <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="这是「时间效应」——整个社会的实际工资水平上涨，与你个人的经验积累是两回事。中国 1986→2012 年人力资本租金价格涨了 3.5 倍（年均约 4.9%），但那是高速追赶期，不可外推；发达经济体长期只有 0.5%–1.5%。保守 0.5% / 中性 1.5% / 乐观 2.5%。&lt;br&gt;注意：不要把「社会平均工资年涨 5%」塞进上面的峰值倍数里，那会双重计算。">i</button></span><span class="fval" id="v_realWageGrowth"></span></div>
+          <input type="range" id="r_realWageGrowth" min="-1" max="5" step="0.25">
+        </div>
+        <div class="hint" id="h_curveNote"></div>
+      </div>
+    </div></details>
+    <details class="blk" open>
+    <summary><span class="blk-t"><span class="eyebrow">假设</span><span class="blk-h">我打算活到几岁</span></span><span class="blk-sum" data-blk="我打算活到几岁"></span></summary>
+    <div class="blk-body">
+    <div class="field">
+      <div class="flabel"><span>规划终止年龄</span><span class="fval" id="v_deathAge"></span></div>
+      <input type="range" id="r_deathAge" min="60" max="110" step="1">
+      <div class="hint">2023 生命表：活到 60 岁的人平均余寿 21.4 年（期望 <b>81.4 岁</b>）。
+        但长寿风险是单边的 — 活短了无非剩钱，活长了是真没钱，所以规划建议取 <b>95</b> 而非期望值。</div>
+    </div>
+  </div></details>
+
+  <details class="blk" open>
+    <summary><span class="blk-t"><span class="eyebrow">约束</span><span class="blk-h">我要留多少应急金</span></span><span class="blk-sum" data-blk="我要留多少应急金"></span></summary>
+    <div class="blk-body">
+    <div class="field">
+      <div class="flabel"><span>死亡时须留下（今日购买力）</span></div>
+      <input type="text" id="i_reserve" inputmode="numeric">
+      <div class="chips" id="reserveChips">
+        <button class="chip" data-v="0">不留</button>
+        <button class="chip" data-v="200000">20 万</button>
+        <button class="chip" data-v="500000">50 万</button>
+        <button class="chip" data-v="1000000">100 万</button>
+        <button class="chip" data-v="2000000">200 万</button>
+      </div>
+      <div class="hint">生大病总要挣扎一下。这笔钱按<b>医疗通胀</b>滚，不是 CPI — 见下方结论里的名义金额。</div>
+    </div>
+  </div></details>
+
+  <details class="blk">
+    <summary><span class="blk-t"><span class="eyebrow">假设</span><span class="blk-h">市场假设</span></span><span class="blk-sum" data-blk="市场假设"></span></summary>
+    <div class="blk-body">
+    <div class="field">
+      <div class="flabel"><span>积累期收益率 <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="沪深300全收益 近20年 9.04%，但近10年仅 3.32%；滚动10年年化中位 6.65%，区间 −1.07%~+16.80%。债端当前起点仅 1.68%。">i</button></span><span class="fval" id="v_rWork"></span></div>
+      <input type="range" id="r_rWork" min="0" max="12" step="0.25">
+    </div>
+    <div class="field">
+      <div class="flabel"><span>退休期收益率 <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="中证全债 近20年 4.87%，但当前 10Y 国债仅 1.68%。30/70 组合滚动10年中位 6.04%，需向下修正。">i</button></span><span class="fval" id="v_rRetire"></span></div>
+      <input type="range" id="r_rRetire" min="0" max="12" step="0.25">
+      <div class="hint">退休后通常降低权益比重，所以这一档一般低于积累期。</div>
+    </div>
+    <div class="field">
+      <div class="flabel"><span>个人通胀（年支出增长） <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="中国CPI 近20年 2.25%，近10年 1.58%，近三年已贴近 0。FIRE 人群支出偏服务与医疗，涨幅高于 CPI 篮子，故加 1pp 个人溢价。">i</button></span><span class="fval" id="v_personalInflation"></span></div>
+      <input type="range" id="r_personalInflation" min="0" max="8" step="0.1">
+    </div>
+    <div class="field">
+      <div class="flabel"><span>医疗通胀（应急金增长） <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="人均卫生总费用 2015年2952元 → 2024年6454元，年化 9.1%（含用量与老龄化，属上界）。取 6% 为保守值。">i</button></span><span class="fval" id="v_medInflation"></span></div>
+      <input type="range" id="r_medInflation" min="0" max="12" step="0.25">
+    </div>
+    <div class="field">
+      <div class="flabel"><span>基础 CPI（折现展示用） <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="仅用于把名义金额折算成今日购买力显示，不影响支出增长。">i</button></span><span class="fval" id="v_cpi"></span></div>
+      <input type="range" id="r_cpi" min="0" max="6" step="0.1">
+    </div>
+  </div></details>
+  <details class="blk">
+    <summary><span class="blk-t"><span class="eyebrow">假设</span><span class="blk-h">退休后的支出曲线</span></span><span class="blk-sum" data-blk="退休后的支出曲线"></span></summary>
+    <div class="blk-body">
+    <label class="ck"><input type="checkbox" id="c_smile">启用支出微笑曲线</label>
+    <div class="hint" style="margin-top:6px">Blanchett (2014, JFP) 实证：退休后实际支出第一个十年
+      年降 1%、第二个十年年降 2%、之后年降 1%，到 84 岁累计约 <b>−26%</b>。
+      他测的是<b>总</b>实际支出，医疗上涨已被可选支出下降抵消在内。
+      <b>数据来自美国研究，中国本土实证未找到</b> — 拿不准就关掉，按恒定实际支出算。</div>
+    <div id="phaseBox" style="margin-top:10px"></div>
+  </div></details>
+
+  <details class="blk">
+    <summary><span class="blk-t"><span class="eyebrow">现金流</span><span class="blk-h">社保养老金</span></span><span class="blk-sum" data-blk="社保养老金"></span></summary>
+    <div class="blk-body">
+    <label class="ck"><input type="checkbox" id="c_pensionOn">把基本养老金计入现金流</label>
+    <div id="pensionBox" style="margin-top:11px;display:none">
+      <div class="field">
+        <div class="flabel"><span>参保起始年龄</span><span class="fval" id="v_joinAge"></span></div>
+        <input type="range" id="r_joinAge" min="16" max="45" step="1">
+      </div>
+      <div class="field">
+        <div class="flabel"><span>当地月计发基数 <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="= 当地上年度全口径城镇单位就业人员月平均工资，各省年度公布。上海 2025 年为 12434 元/月。各地差异可达 2 倍，务必填自己所在地。">i</button></span></div>
+        <input type="text" id="i_socialAvg" inputmode="numeric">
+        <div class="chips" id="cityChips">
+          <button class="chip" data-v="12434">上海</button>
+          <button class="chip" data-v="11761">北京</button>
+          <button class="chip" data-v="9000">中部省会</button>
+        </div>
+        <div class="hint">北京/中部为量级参考值，请以当地人社局当年公布为准。</div>
+      </div>
+      <div class="field">
+        <div class="flabel"><span>缴费基数档次</span></div>
+        <div class="chips" id="baseModeChips">
+          <button class="chip" data-v="min">最低档 60%</button>
+          <button class="chip" data-v="income">随收入</button>
+          <button class="chip" data-v="max">顶格 300%</button>
+        </div>
+        <div class="hint">缴费基数一律钳在当地社平的 <b>60%–300%</b> 之间。
+          最低档 = 社平 60%，顶格 = 社平 300%，「随收入」用你的税前月薪并自动钳住。</div>
+      </div>
+      <div class="field">
+        <div class="flabel"><span>当前税前月薪（定基数用）</span></div>
+        <input type="text" id="i_monthlyIncome" inputmode="numeric">
+      </div>
+      <div class="field">
+        <div class="flabel"><span>社平工资年增长率 <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="决定计发基数与缴费基数上下限的抬升速度。你的收入涨得比社平快，缴费指数才会上升。">i</button></span><span class="fval" id="v_socialGrowth"></span></div>
+        <input type="range" id="r_socialGrowth" min="0" max="10" step="0.25">
+      </div>
+      <div class="field">
+        <div class="flabel"><span>个人账户记账利率 <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="人社部每年公布：2016 8.31% / 2017 7.12% / 2018 8.29% / 2019 7.61% / 2020 6.04% / 2021 6.69% / 2022 6.12% / 2023 3.97% / 2024 2.62% / 2025 1.50%。十年从 8% 级降到 1.5%，不可用历史均值外推。">i</button></span><span class="fval" id="v_accountRate"></span></div>
+        <input type="range" id="r_accountRate" min="0" max="9" step="0.25">
+        <div class="hint" id="h_spread"></div>
+      </div>
+      <div class="field">
+        <div class="flabel"><span>法定领取年龄</span><span class="fval" id="v_claimAge"></span></div>
+        <input type="range" id="r_claimAge" min="50" max="70" step="1">
+        <div class="hint">延迟退休后：1976-09 之后出生的男性一律 <b>63 岁</b>，女干部 58，女工人 55。</div>
+      </div>
+      <div class="field">
+        <div class="flabel"><span>养老金年上调率 <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="2016–2025 逐年：6.5/5.5/5.0/5.0/5.0/4.5/4.0/3.8/3.0/2.0(%)，单调下滑。与 CPI 无公式挂钩，由基金收支压力驱动。不可用十年均值 4.5% 外推。">i</button></span><span class="fval" id="v_cola"></span></div>
+        <input type="range" id="r_cola" min="0" max="6" step="0.25">
+      </div>
+      <label class="ck"><input type="checkbox" id="c_keepPaying">停止工作后以灵活就业身份续缴至法定退休年龄</label>
+      <div class="hint" style="margin-top:5px">费率 20%（12% 统筹 + 8% 个人账户），全额自己承担。
+        不续缴则已缴年限<b>不清零</b>（累计制），个人账户余额继续计息。</div>
+      <div id="pensionOut" style="margin-top:12px"></div>
+    </div>
+  </div></details>
+
+  <details class="blk">
+    <summary><span class="blk-t"><span class="eyebrow">现金流</span><span class="blk-h">时间轴事件</span></span><span class="blk-sum" data-blk="时间轴事件"></span></summary>
+    <div class="blk-body">
+    <div class="hint" style="margin-bottom:9px">买房首付、房租收入、子女教育…… 金额按<b>今日购买力</b>填，
+      会按各自的增长率折算到发生年份。正数=流入，负数=流出。</div>
+    <div class="scroll"><table class="ev-tbl"><thead><tr>
+      <th>名称</th><th>年金额</th><th>起</th><th>止</th><th>增长</th><th></th><th></th>
+    </tr></thead><tbody id="evBody"></tbody></table></div>
+    <button id="addEv" style="margin-top:8px">+ 添加一项</button>
+  </div></details>
+
+  <section class="sect">
+    <div class="row">
+      <button id="btnReset">恢复默认</button>
+      <button id="btnExport">导出配置</button>
+      <button id="btnImport">导入配置</button>
+    </div>
+    <textarea id="ioBox" style="display:none;width:100%;margin-top:8px;min-height:110px;
+      font:12px ui-monospace,SFMono-Regular,Menlo,monospace;padding:8px;color:var(--ink);
+      background:var(--plane);border:1px solid var(--border);border-radius:6px"></textarea>
+    <div class="hint" style="margin-top:8px">所有数据只存在你自己的浏览器里，不会上传到任何服务器。</div>
+  </section>
+</div>
+<!-- ================= 右：读数区 ================= -->
+<div class="readout">
+  <section class="sect">
+    <div class="sect-head">
+      <div>
+        <div class="eyebrow">主图</div>
+        <h2>资产轨迹</h2>
+      </div>
+      <div class="chips" style="margin:0">
+        <button class="chip" id="mReal" data-v="real">今日购买力</button>
+        <button class="chip" id="mNom" data-v="nom">名义金额</button>
+      </div>
+    </div>
+    <div class="legend">
+      <span class="lg"><span class="sw" style="background:var(--s1)"></span>积累期（还在上班）</span>
+      <span class="lg"><span class="sw" style="background:var(--s2)"></span>提取期（已退休）</span>
+      <span class="lg"><span class="sw line" style="background:var(--muted)"></span>应急预留金水位</span>
+    </div>
+    <div class="chart"><div id="c1"></div><div class="tip" id="t1"></div></div>
+  </section>
+
+  <section class="sect">
+    <div class="eyebrow">敏感性</div>
+    <h2>多活十年，要多干几年</h2>
+    <p class="sect-note">横轴是你假设的规划终止年龄，纵轴是那种情况下最早能退休的年龄。
+      红色区间表示无论干到多久都撑不住。</p>
+    <div class="chart"><div id="c2"></div><div class="tip" id="t2"></div></div>
+  </section>
+
+  <section class="sect">
+    <div class="eyebrow">敏感性</div>
+    <h2>想留多少救命钱，代价是多干几年</h2>
+    <p class="sect-note">横轴是死亡时须留下的应急金（今日购买力）。
+      这笔钱按<b>医疗通胀</b>而非 CPI 滚动，所以斜率比直觉陡。</p>
+    <div class="chart"><div id="c3"></div><div class="tip" id="t3"></div></div>
+  </section>
+
+  <section class="sect">
+    <div class="eyebrow">稳健性</div><h2>压力测试</h2>
+    <div class="scroll"><table><thead><tr>
+      <th>情景</th><th>FIRE 年龄</th><th>变化</th><th>死亡时结余（今日购买力）</th>
+    </tr></thead><tbody id="stressBody"></tbody></table></div>
+    <div class="note"><b>这张表低估了真实风险。</b>本模型用恒定收益率，看不见<b>序列收益风险</b>——
+      同样的平均收益，顺序不同结局不同。退休头几年遇上熊市，一边跌一边取钱，会永久锁死复利基数。
+      用中证指数 2005–2025 全收益数据做重抽样：恒定收益率模型对 2.5%–5% 的<b>每一个</b>提取率都报「永不破产」，
+      实际有 16%–36% 的路径破产，且误差方向永远偏乐观。</div>
+  </section>
+
+  <section class="sect">
+    <div class="eyebrow">明细</div><h2>逐年明细</h2>
+    <div class="scroll" style="max-height:340px"><table><thead><tr>
+      <th>年龄</th><th>收入</th><th>支出</th><th>其他现金流</th><th>投资收益</th>
+      <th>期末（名义）</th><th>期末（今日购买力）</th>
+    </tr></thead><tbody id="tblBody"></tbody></table></div>
+  </section>
+
+  <section class="sect">
+    <div class="eyebrow">附录</div><h2>计算方法</h2>
+    <div class="method" id="method"></div>
+  </section>
+</div>
+</div><!-- /layout -->
+
+<div class="foot">
+  <span id="selftest"></span>
+  <span>模型与参数依据见仓库 <code>README.md</code> 与 <code>docs/</code>。数据仅存于本地浏览器。</span>
+</div>
+</div><!-- /wrap -->
+<script src="js/app.js?v=1bb590d6"></script>
+</body></html>

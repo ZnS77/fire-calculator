@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "none",
+    "lib": [
+      "ES2019",
+      "DOM"
+    ],
+    "outDir": "js",
+    "rootDir": "src",
+    "strict": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "removeComments": false,
+    "declaration": false,
+    "sourceMap": false,
+    "newLine": "lf",
+    "types": [],
+    "typeRoots": []
+  },
+  "include": [
+    "src/**/*.ts"
+  ]
+}

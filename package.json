@@ -1,0 +1,20 @@
+{
+  "name": "fire-calculator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "个人 FIRE 计算器：退休年龄是解出来的，死亡年龄可调，死后须留下应急金",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:prod": "node build.mjs --prod",
+    "watch": "esbuild src/main.ts --bundle --outfile=js/app.js --format=iife --target=es2019 --charset=utf8 --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "esbuild src/test.ts --bundle --outfile=.tmp/test.cjs --format=cjs --platform=node --target=node18 --charset=utf8 && node .tmp/test.cjs",
+    "check": "npm run typecheck && npm test",
+    "release": "npm run check && npm run build:prod",
+    "serve": "python3 -m http.server 8080"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  }
+}
