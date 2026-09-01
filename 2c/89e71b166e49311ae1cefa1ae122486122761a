@@ -1,0 +1,22 @@
+index.html
+  s_3a4ba3bf6dc84d::t_d94d96cc9c5b06 13
+  s_3a4ba3bf6dc84d::t_4f6e582b8a368b 21-28,320-321
+css/style.css
+  s_3a4ba3bf6dc84d::t_939bc2bddd4ca6 291-306
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "2c89e71b166e49311ae1cefa1ae122486122761a",
+  "prompts": {},
+  "sessions": {
+    "s_3a4ba3bf6dc84d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51cdf1a8-e0b0-41a7-b098-d1da3bd5b0c9",
+        "model": "claude-opus-5"
+      },
+      "human_author": "eurika.zhou <eurika.zhou@nio.com>"
+    }
+  }
+}
