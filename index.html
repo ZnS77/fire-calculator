@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
-<link rel="stylesheet" href="css/style.css?v=fd8d7d78">
+<link rel="stylesheet" href="css/style.css?v=4ce1501f">
 </head><body>
 <div class="wrap">
 <header>
@@ -45,19 +45,6 @@
         填高了整条曲线都会被抬起来。</div>
     </div>
     <div class="field">
-      <div class="flabel"><span>年收入增长率</span><span class="fval" id="v_incomeGrowth"></span></div>
-      <input type="range" id="r_incomeGrowth" min="0" max="12" step="0.5">
-      <label class="ck" style="margin-top:6px"><input type="checkbox" id="c_capIncome">45 岁后工资不再增长</label>
-    </div>
-    <div class="field">
-      <div class="flabel"><span>职业天花板（年收入上限）</span></div>
-      <input type="text" id="i_incomeCeiling" inputmode="numeric">
-      <label class="ck" style="margin-top:6px"><input type="checkbox" id="c_ceilingOn">启用天花板</label>
-      <div class="hint">按<b>今日购买力</b>填，模拟时随通胀保值。
-        没有天花板的复利在 20 年尺度上会给出荒谬的收入 ——
-        年薪 30 万按 4% 涨 30 年是 97 万，按 6% 是 172 万。这是模型最容易失真的地方。</div>
-    </div>
-    <div class="field">
       <div class="flabel"><span>当前年支出</span></div>
       <input type="text" id="i_annualSpend" inputmode="numeric">
       <div class="hint" id="h_saverate"></div>
@@ -75,6 +62,21 @@
       <p class="sect-note" style="margin-bottom:10px">人的收入不是一路复利上涨，而是有峰值的倒 U 形。
         选一条最像你的曲线，或用简单模型自己填增长率。</p>
       <div id="incomePresets" class="preset-grid"></div>
+      <div id="simpleParams" style="display:none">
+    <div class="field">
+      <div class="flabel"><span>年收入增长率</span><span class="fval" id="v_incomeGrowth"></span></div>
+      <input type="range" id="r_incomeGrowth" min="0" max="12" step="0.5">
+      <label class="ck" style="margin-top:6px"><input type="checkbox" id="c_capIncome">45 岁后工资不再增长</label>
+    </div>
+    <div class="field">
+      <div class="flabel"><span>职业天花板（年收入上限）</span></div>
+      <input type="text" id="i_incomeCeiling" inputmode="numeric">
+      <label class="ck" style="margin-top:6px"><input type="checkbox" id="c_ceilingOn">启用天花板</label>
+      <div class="hint">按<b>今日购买力</b>填，模拟时随通胀保值。
+        没有天花板的复利在 20 年尺度上会给出荒谬的收入 ——
+        年薪 30 万按 4% 涨 30 年是 97 万，按 6% 是 172 万。这是模型最容易失真的地方。</div>
+    </div>
+      </div>
       <div id="curveParams" style="display:none">
         <div class="field">
           <div class="flabel"><span>峰值年龄</span><span class="fval" id="v_peakAge"></span></div>
@@ -119,7 +121,8 @@
         <button class="chip" data-v="1000000">100 万</button>
         <button class="chip" data-v="2000000">200 万</button>
       </div>
-      <div class="hint">生大病总要挣扎一下。这笔钱按<b>医疗通胀</b>滚，不是 CPI — 见下方结论里的名义金额。</div>
+      <div class="hint"><span class="quip">「医生，我觉得我还可以再抢救一下。」</span>
+        这笔钱按<b>医疗通胀</b>滚，不是 CPI —— 六十多年下来差十倍以上，见上方结论里的名义金额。</div>
     </div>
   </div></details>
 
@@ -308,5 +311,5 @@
   <span>模型与参数依据见仓库 <code>README.md</code> 与 <code>docs/</code>。数据仅存于本地浏览器。</span>
 </div>
 </div><!-- /wrap -->
-<script src="js/app.js?v=1bb590d6"></script>
+<script src="js/app.js?v=8b42e911"></script>
 </body></html>

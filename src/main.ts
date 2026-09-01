@@ -396,6 +396,7 @@ function bindInfoTips(): void {
 function bindIncomeModel(): void {
   const grid = $('incomePresets');
   const params = $('curveParams');
+  const simpleParams = $('simpleParams');
 
   const cards: Array<{ key: string; name: string; who: string }> = [
     { key: 'simple', name: '简单增长', who: '固定年增长率 + 天花板，自己填' },
@@ -442,7 +443,12 @@ function bindIncomeModel(): void {
       grid.querySelector(`[data-k="${c.key}"]`)
         ?.setAttribute('aria-pressed', String(active));
     }
-    params.style.display = st.input.incomeModel.kind === 'curve' ? '' : 'none';
+    // 两套参数互斥显示：简单增长用「增长率 + 封顶 + 天花板」，
+    // 曲线用「峰值年龄 + 峰值倍数 + 峰后降幅 + 社会工资增长」。
+    // 之前两套都摆在界面上，选了曲线还能调增长率，但那三个参数根本不参与计算。
+    const isCurve = st.input.incomeModel.kind === 'curve';
+    params.style.display = isCurve ? '' : 'none';
+    simpleParams.style.display = isCurve ? 'none' : '';
   };
 
   grid.addEventListener('click', e => {

@@ -262,6 +262,11 @@ input[type=text]:hover,input[type=number]:hover{border-color:var(--muted)}
 :focus-visible{outline:2px solid var(--s1);outline-offset:1px}
 .hint{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.5}
 .hint b{color:var(--ink2);font-weight:600}
+/* 一句人话，用衬线斜体和正文拉开，别当成参数说明读 */
+.quip{
+  display:block;font-family:var(--serif);font-style:italic;
+  font-size:13px;color:var(--ink2);margin-bottom:4px;
+}
 
 /* 预设值：分段控件，不是圆角药丸 */
 .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;max-width:100%}
