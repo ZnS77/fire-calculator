@@ -1,0 +1,30 @@
+src/main.ts
+  s_2f0eb931156380::t_31b7284b051aac 109,113
+  s_2f0eb931156380::t_e63b9f35c5c2b0 157-159
+  s_2f0eb931156380::t_a12fa367017490 190-201
+  s_2f0eb931156380::t_d6cad75690a8c8 51-52,54,56,59-60,66-67,69
+src/test.ts
+  s_2f0eb931156380::t_2d16af5c5b8a29 451-493
+index.html
+  s_2f0eb931156380::t_b7cc7e4bdcf90c 316
+js/app.js
+  s_2f0eb931156380::t_b7cc7e4bdcf90c 1,93,99,103,114,118,126-128
+src/engine.ts
+  s_2f0eb931156380::t_cda94f40c5c3a4 261-298
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "252d8a14a4c1a570e50c36ded532189e6d1bbc5c",
+  "prompts": {},
+  "sessions": {
+    "s_2f0eb931156380": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "74135102-36ad-4242-ba96-91789f994966",
+        "model": "claude-opus-5"
+      },
+      "human_author": "eurika.zhou <eurika.zhou@nio.com>"
+    }
+  }
+}
