@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
-<link rel="stylesheet" href="css/style.css?v=7a0f1ad9">
+<link rel="stylesheet" href="css/style.css?v=207cff74">
 </head><body>
 <div class="wrap">
 <header>
@@ -54,6 +54,9 @@
     <div class="field">
       <div class="flabel"><span>当前年支出</span></div>
       <input type="text" id="i_annualSpend" inputmode="numeric">
+      <div class="hint">填<b>含住房的全部开销</b>：房租或已有的房贷月供、物业水电都算进去；
+        家里已经有孩子的话，孩子那份也算。下方「子女教育」「购房」两个模块按这个口径做抵扣，
+        口径不一致，它们算出来的增量就是错的。</div>
       <div class="hint" id="h_saverate"></div>
     </div>
     <div class="field">
@@ -128,13 +131,20 @@
         <button class="chip" data-v="2000000">200 万</button>
       </div>
       <div class="hint"><span class="quip">「医生，我觉得我还可以再抢救一下。」</span>
-        这笔钱按<b>医疗通胀</b>滚，不是 CPI —— 六十多年下来差十倍以上，见上方结论里的名义金额。</div>
+        这笔钱按<b>医疗通胀</b>（CPI + 2.0pp）滚，不是 CPI —— 六十多年下来差一倍以上，见上方结论里的名义金额。</div>
     </div>
   </div></details>
 
   <details class="blk">
     <summary><span class="blk-t"><span class="eyebrow">假设</span><span class="blk-h">市场假设</span></span><span class="blk-sum" data-blk="市场假设"></span></summary>
     <div class="blk-body">
+      <p class="sect-note">这几个数不用逐个调，选一档就好。它们不独立：真正决定结果的是<b>实际</b>收益率
+        （收益率 ÷ 通胀），所以收益率和通胀必须一起动 —— 只把收益率调低、通胀留在原处，
+        等于假设「低利率 + 高通胀」的滞胀世界，退休期实际收益变成负数，FIRE 年龄凭空多推好几年。</p>
+      <div id="marketPresets" class="preset-grid"></div>
+      <details class="adv">
+        <summary>自己微调这 5 个系数</summary>
+        <div class="adv-body">
     <div class="field">
       <div class="flabel"><span>积累期收益率 <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="默认 4% 是保守档。沪深300全收益近20年 9.04%，但近10年仅 3.32%；滚动10年年化中位 6.65%，区间 −1.07%~+16.80%。而债端当前起点只有 1.68%，所以历史均值不可直接外推。&lt;br&gt;注意：调高收益率时通常也要调高通胀，两者不是独立的。">i</button></span><span class="fval" id="v_rWork"></span></div>
       <input type="range" id="r_rWork" min="0" max="12" step="0.25">
@@ -149,13 +159,15 @@
       <input type="range" id="r_personalInflation" min="0" max="8" step="0.1">
     </div>
     <div class="field">
-      <div class="flabel"><span>医疗通胀（应急金增长） <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="人均卫生总费用 2015年2952元 → 2024年6454元，年化 9.1%（含用量与老龄化，属上界）。取 6% 为保守值。">i</button></span><span class="fval" id="v_medInflation"></span></div>
-      <input type="range" id="r_medInflation" min="0" max="12" step="0.25">
+      <div class="flabel"><span>医疗通胀溢价（相对 CPI） <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="这一档填的是&lt;b&gt;相对 CPI 的溢价&lt;/b&gt;，实际用的医疗通胀 = CPI + 溢价。&lt;br&gt;默认 +2.0pp。中国「医疗保健」CPI 2016–2025 年均 2.24%、同期 CPI 1.44%，超额仅 0.80pp；取 2.0pp 是因为这笔钱的主体是养老院和护工这类劳动密集服务，价格盯工资走（美国养老院 CPI 长期超出总体通胀 2.75pp，是上界）。&lt;br&gt;三个刻度：+1.0pp 长护险铺开、走日本行政定价那条路；+2.0pp 中枢；+3.0pp 自费养老成为常态。&lt;br&gt;原先写死的 6% 对应超额 4.5pp，高于本文档查到的任何一条长期价格序列。依据用的是「人均卫生总费用」年化 9.1%，那是政府＋医保＋自付三项加总的支出额，不是价格指数 —— 口径就不对。">i</button></span><span class="fval" id="v_medPremium"></span></div>
+      <input type="range" id="r_medPremium" min="0" max="4" step="0.1">
     </div>
     <div class="field">
       <div class="flabel"><span>基础 CPI（折现展示用） <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="仅用于把名义金额折算成今日购买力显示，不影响支出增长。默认 1.5% 取中国 CPI 近 10 年几何均值 1.58%。">i</button></span><span class="fval" id="v_cpi"></span></div>
       <input type="range" id="r_cpi" min="0" max="6" step="0.1">
     </div>
+        </div>
+      </details>
   </div></details>
   <details class="blk">
     <summary><span class="blk-t"><span class="eyebrow">假设</span><span class="blk-h">退休后的支出曲线</span></span><span class="blk-sum" data-blk="退休后的支出曲线"></span></summary>
@@ -227,6 +239,157 @@
   </div></details>
 
   <details class="blk">
+    <summary><span class="blk-t"><span class="eyebrow">现金流</span><span class="blk-h">子女教育</span></span><span class="blk-sum" data-blk="子女教育"></span></summary>
+    <div class="blk-body">
+    <p class="sect-note">从出生到经济独立（22 岁）的全口径养育成本 —— 饮食、衣着、教育、医疗、
+      交通都算，不只是学费。先选一个大概的档位，再按自己的情况微调。
+      档位来源与口径见附录的<b>常见问题</b>。</p>
+    <label class="ck"><input type="checkbox" id="c_childOn">把子女养育支出计入现金流</label>
+    <div id="childBox" style="margin-top:11px;display:none">
+      <div id="childPresets" class="preset-grid"></div>
+      <div class="field">
+        <div class="flabel"><span>孩子</span></div>
+        <div id="childKids"></div>
+        <button id="addKid" style="margin-top:8px">+ 再加一个</button>
+        <div class="hint">第三列填「你现在每年在这个孩子身上花多少」，
+          <b>要含饮食、衣物、教育、医疗、兴趣班</b>；模块只加差额。
+          还没出生的孩子不用填。</div>
+      </div>
+      <div class="field" id="intlField" style="display:none">
+        <div class="flabel"><span>几岁转国际路线</span><span class="fval" id="v_childIntlFrom"></span></div>
+        <input type="range" id="r_childIntlFrom" min="0" max="18" step="1">
+        <div class="hint">常见路径是公立读到初中、高中转国际、本科出国。转轨前按「小康公立」档走。</div>
+      </div>
+      <label class="ck"><input type="checkbox" id="c_childHousing">按原始全口径计（含居住分摊）</label>
+      <div class="hint" style="margin-bottom:9px">育娲的养育成本<b>含居住分摊</b>，默认按 0.8 系数扣掉，
+        避免与「购房」模块算两遍。不打算用购房模块才勾这一项。</div>
+      <label class="ck"><input type="checkbox" id="c_childSibling">多孩按边际成本打折</label>
+      <div class="hint" style="margin-bottom:9px">第二孩起按 0.80 / 0.70 / 0.45 计
+        —— 方向可靠，<b>幅度未证实</b>。</div>
+      <label class="ck"><input type="checkbox" id="c_childSubsidy">计入育儿补贴</label>
+      <div class="hint" style="margin-bottom:9px">3600 元/年/孩，3 周岁以下。名义定额，不随物价上调。</div>
+      <div class="field">
+        <label class="ck"><input type="checkbox" id="c_childPremiumOn">自己定教育通胀溢价</label>
+        <div id="childPremiumBox" style="display:none;margin-top:8px">
+          <div class="flabel"><span>相对 CPI 的溢价 <button type="button" class="info" aria-expanded="false" aria-label="说明" data-tip="「教育通胀很高」在数据上站不住：教育服务 CPI 2001—2023 年均 +2.5%，同期总体 CPI 年均 2.1%—2.3%，超额只有 0.2—0.4pp；2025 年教育服务 +1.0%。&lt;br&gt;常被引用的「2025 年人均教育文化娱乐支出 +9.4%」是&lt;b&gt;消费量增加，不是涨价&lt;/b&gt;，把它当通胀率是最常见的错误。&lt;br&gt;真正的缺口在于教育服务 CPI 只覆盖受管制的学费，不覆盖双减后转入隐形市场的校外培训、国际学校学费、海外留学，以及每 10—15 年一次的公办高校台阶式调价（2023 年多省上调 20%—40%）。所以档位溢价里约有一半是建模惯例而非实证。">i</button></span><span class="fval" id="v_childPremium"></span></div>
+          <input type="range" id="r_childPremium" min="0" max="4" step="0.1">
+        </div>
+        <div class="hint" id="h_childPremium"></div>
+      </div>
+      <div id="childOut" style="margin-top:12px"></div>
+    </div>
+  </div></details>
+
+  <details class="blk">
+    <summary><span class="blk-t"><span class="eyebrow">现金流</span><span class="blk-h">购房</span></span><span class="blk-sum" data-blk="购房"></span></summary>
+    <div class="blk-body">
+    <p class="sect-note">首付、月供、持有成本与可选的退休后卖房。首付是<b>资产转移不是支出</b>，
+      月供是<b>名义固定</b>的。口径为什么这么定，见附录的<b>常见问题</b>。</p>
+    <label class="ck"><input type="checkbox" id="c_houseOn">把购房现金流计入</label>
+    <div id="houseBox" style="margin-top:11px;display:none">
+      <div class="field">
+        <div class="flabel"><span>单价</span><span class="fval" id="v_houseUnit"></span></div>
+        <input type="range" id="r_houseUnit" min="10000" max="150000" step="10000">
+        <input type="text" id="i_houseUnit" inputmode="numeric" style="margin-top:7px">
+        <div class="hint">滑块按 <b>1 万/㎡</b> 步进，落不到刻度上的数用下面的输入框直接填
+          （支持 <code>2w</code> / <code>13000</code> 两种写法）。</div>
+      </div>
+      <div class="field">
+        <div class="flabel"><span>面积</span><span class="fval" id="v_houseArea"></span></div>
+        <input type="range" id="r_houseArea" min="30" max="200" step="10">
+        <div class="hint" id="h_houseTotal"></div>
+      </div>
+      <div class="field">
+        <div class="flabel"><span>付款方式</span></div>
+        <div class="chips" id="payModeChips">
+          <button class="chip" data-v="cash">全款</button>
+          <button class="chip" data-v="commercial">商贷</button>
+          <button class="chip" data-v="hpf">公积金</button>
+          <button class="chip" data-v="combo">组合贷</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="flabel"><span>该房产的市场月租金</span></div>
+        <input type="text" id="i_houseRent" inputmode="numeric">
+        <div class="hint">只用来算租金回报率和卖房后的默认房租，不参与买房现金流。
+          改面积时会自动重算，你手改过之后不再被覆盖。</div>
+      </div>
+      <div class="field">
+        <div class="flabel"><span>首付比例</span><span class="fval" id="v_houseDown"></span></div>
+        <div class="chips" id="downRatioChips">
+          <button class="chip" data-v="0.15">15%</button>
+          <button class="chip" data-v="0.2">20%</button>
+          <button class="chip" data-v="0.3">30%</button>
+          <button class="chip" data-v="0.4">40%</button>
+        </div>
+        <input type="range" id="r_houseDown" min="15" max="100" step="5">
+        <div class="hint">全国下限 15%，滑块可微调。</div>
+      </div>
+      <div class="field">
+        <div class="flabel"><span>贷款年限</span></div>
+        <div class="chips" id="loanYearsChips">
+          <button class="chip" data-v="20">20 年</button>
+          <button class="chip" data-v="25">25 年</button>
+          <button class="chip" data-v="30">30 年</button>
+          <button class="chip" data-v="40">40 年</button>
+        </div>
+        <div class="hint">主流 30 年，上限 40 年。</div>
+      </div>
+      <div class="field">
+        <div class="flabel"><span>商贷利率</span><span class="fval" id="v_houseComRate"></span></div>
+        <input type="range" id="r_houseComRate" min="2" max="6" step="0.05">
+        <div class="hint">首套主流执行 3.05%。</div>
+      </div>
+      <div class="field">
+        <div class="flabel"><span>公积金利率</span><span class="fval" id="v_houseHpfRate"></span></div>
+        <input type="range" id="r_houseHpfRate" min="1.5" max="4" step="0.025">
+        <div class="hint">5 年以上首套 2.6%，二套 3.075%。</div>
+      </div>
+      <div class="field">
+        <div class="flabel"><span>公积金可贷上限</span></div>
+        <input type="text" id="i_houseHpfCap" inputmode="numeric">
+        <div class="hint">各城市差异极大，请按当地公积金中心公布的数字填。</div>
+      </div>
+      <div class="field">
+        <div class="flabel"><span>几岁买</span><span class="fval" id="v_houseBuyAge"></span></div>
+        <input type="range" id="r_houseBuyAge" min="20" max="70" step="1">
+      </div>
+      <div class="field">
+        <div class="flabel"><span>当前每月住房支出</span></div>
+        <input type="text" id="i_houseMonthly" inputmode="numeric">
+        <div class="hint">填你现在每月交的房租，或者已有房子的月供；自有房无贷款就填 0。
+          <b>填错这一项会把住房支出算两遍</b>，原因见附录的常见问题。</div>
+      </div>
+      <label class="ck"><input type="checkbox" id="c_houseSell">退休后卖房</label>
+      <div id="houseSellBox" style="margin-top:11px;display:none">
+        <div class="field">
+          <div class="flabel"><span>几岁卖</span><span class="fval" id="v_houseSellAge"></span></div>
+          <input type="range" id="r_houseSellAge" min="40" max="100" step="1">
+        </div>
+        <div class="field">
+          <div class="flabel"><span>房价年增长率（名义）</span></div>
+          <div class="chips" id="priceGrowthChips">
+            <button class="chip" data-v="-0.02">悲观 −2%</button>
+            <button class="chip" data-v="0">中性 0%</button>
+            <button class="chip" data-v="0.02">乐观 +2%</button>
+          </div>
+          <div class="hint">默认 <b>0%</b>，不默认正增长。</div>
+        </div>
+        <div class="field">
+          <div class="flabel"><span>卖出成本率</span><span class="fval" id="v_houseSellCost"></span></div>
+          <input type="range" id="r_houseSellCost" min="0" max="3" step="0.1">
+        </div>
+        <div class="field">
+          <div class="flabel"><span>卖房后的月租金</span></div>
+          <input type="text" id="i_housePostRent" inputmode="numeric">
+          <div class="hint">卖了总得住，这笔要算。</div>
+        </div>
+      </div>
+      <div id="houseOut" style="margin-top:12px"></div>
+    </div>
+  </div></details>
+
+  <details class="blk">
     <summary><span class="blk-t"><span class="eyebrow">现金流</span><span class="blk-h">时间轴事件</span></span><span class="blk-sum" data-blk="时间轴事件"></span></summary>
     <div class="blk-body">
     <div class="hint" style="margin-bottom:9px">买房首付、房租收入、子女教育…… 金额按<b>今日购买力</b>填，
@@ -282,7 +445,7 @@
     <div class="eyebrow">敏感性</div>
     <h2>想留多少救命钱，代价是多干几年</h2>
     <p class="sect-note">横轴是死亡时须留下的应急金（今日购买力）。
-      这笔钱按<b>医疗通胀</b>而非 CPI 滚动，所以斜率比直觉陡。</p>
+      这笔钱按<b>医疗通胀</b>（CPI + 2.0pp）而非 CPI 滚动，所以斜率比 CPI 线略陡。</p>
     <div class="chart"><div id="c3"></div><div class="tip" id="t3"></div></div>
   </section>
 
@@ -309,6 +472,180 @@
   </section>
 
   <section class="sect">
+    <div class="eyebrow">附录</div><h2>常见问题</h2>
+    <p class="sect-note">各模块里没写全的口径与出处都在这儿。购房和子女这两块最容易填错，
+      填之前先扫一眼对应的几条。</p>
+    <div class="faq">
+
+      <details class="faq-i"><summary>为什么购房模块不给「城市 → 房价」的默认值</summary>
+        <div class="faq-b">
+          <p>因为各城市的证据强度差得很远：一线有分区数据交叉验证，强二线只核查了南京，
+            弱二线以下完全没核查过 —— 但在界面上它们会长得一模一样。
+            把推算当实证摆出来，比不给默认值更糟。原来那六个城市档位的数字连同来源与证据强度判定，
+            挪进了 <code>docs/生活模块.md</code> 的附录，作为参考资料仍可查。</p>
+          <p>自己查单价时还有一层口径要知道：链家、房天下这类平台上看到的是<b>挂牌价</b>，
+            实际成交通常低 5%–15%；网签均价则普遍低报。三个口径能差近一倍。</p>
+        </div>
+      </details>
+
+      <details class="faq-i"><summary>面积为什么默认 100㎡，改面积时月租金为什么会跟着变</summary>
+        <div class="faq-b">
+          <p>面积没有全国性的二手成交数据可依，100㎡ 只是个好对账的通用默认值，
+            请按自己要买的户型改。</p>
+          <p>总价是派生显示，不是输入项 —— 有第三个可编辑的数，就会出现「单价 × 面积 ≠ 总价」
+            的不自洽状态，而那时三个数里必然有一个是错的。改单价或面积，总价跟着走。</p>
+          <p>月租金同理：改面积时会按 34.01 元/㎡·月 重算，你手改过之后就不再被覆盖。</p>
+        </div>
+      </details>
+
+      <details class="faq-i"><summary>市场月租金的默认值是怎么来的，能直接用吗</summary>
+        <div class="faq-b">
+          <p>默认值按 <b>34.01 元/㎡·月</b> 换算（中指研究院 50 城住宅平均租金，2026-07）。
+            这是有来源的全国均值，但分层差异极大：北上深实测 81–83 元/㎡·月，
+            落到本模块就是两倍以上的偏差。</p>
+          <p>所以默认值算出来的租金回报率只是个占位数，<b>以你自己查到的实际租金为准</b>。
+            这个数只用来算租金回报率和卖房后的默认房租，不参与买房现金流。</p>
+        </div>
+      </details>
+
+      <details class="faq-i"><summary>我填的「当前年支出」已经包含房租了，会不会重复计算</summary>
+        <div class="faq-b">
+          <p>不会，前提是「当前每月住房支出」填对了 —— 那是全模块最容易填错的一项。</p>
+          <p>你在「我的基本情况」里填的年支出几乎必然已经含了房租或已有月供。
+            买房后这笔钱会被换成月供，模块把它抵扣掉，只把<b>差额</b>加进现金流。
+            不抵扣就是把住房支出算了两遍。</p>
+          <p>注意抵扣的两边性质不同：被抵扣的房租随通胀涨，月供名义固定，模型里没有混。</p>
+        </div>
+      </details>
+
+      <details class="faq-i"><summary>为什么月供不随通胀增长</summary>
+        <div class="faq-b">
+          <p>等额本息月供在整个还款期内<b>名义金额一分不变</b>，这是合同定死的，不是建模简化。
+            而房租、物业费随通胀涨 —— 换句话说，通胀在帮你还房贷：还款期越靠后，
+            那笔月供的实际负担越轻。读数区会按当前 CPI 给出最后一年月供折合今天多少钱，
+            以及整个还款期被通胀吃掉的比例。</p>
+          <p>反过来，如果把月供当成「随通胀增长的实际固定支出」处理，
+            会高估后期负担 25%–35%（2%–3% 通胀下），足以改变 FIRE 年龄的结论。
+            这是这个模块最容易出的数值错误，也是它和「时间轴事件」里手填一笔房贷的区别所在。</p>
+        </div>
+      </details>
+
+      <details class="faq-i"><summary>首付为什么不算在支出里</summary>
+        <div class="faq-b">
+          <p>首付是<b>资产转移不是支出</b>：它把流动金融资产换成不动产，砍的是本金和之后所有复利，
+            但不能进「年支出」基数 —— 否则会被 25 倍法则之类的规则再放大一遍。
+            模型里它是一次性负现金流事件，正好只影响资产端，不影响年支出。</p>
+          <p>契税、中介费才是真正的一次性支出，同样走一次性事件。这笔钱在首付之外，
+            很多人做预算时会漏：468 万的房子按 2% 约 9.4 万元，117 万的房子约 2.3 万元。</p>
+        </div>
+      </details>
+
+      <details class="faq-i"><summary>买了房为什么净值曲线会掉一大块</summary>
+        <div class="faq-b">
+          <p>主引擎的资产只有金融资产，<b>房子在卖出前不计入净值</b>。所以买房当年净值会掉一大块，
+            之后靠卖房事件再回来。</p>
+          <p>这是刻意的：自住房不产生可支取的现金流，按市值算进 FIRE 资产会让
+            「够不够退休」的判断失真。</p>
+        </div>
+      </details>
+
+      <details class="faq-i"><summary>房价年增长率为什么默认 0%</summary>
+        <div class="faq-b">
+          <p>不默认正增长，是因为<b>过去五年 70 城二手住宅连续下跌</b>：
+            连续 26 个月全部同比下降，2026-02 当月平均 −6.31%，自 2021 年高点累计约 <b>−22%</b>
+            （媒体测算与中指均价序列互证的推算，非官方数据）。</p>
+          <p>三个档位里的「乐观 +2%」只是房价跟上通胀、实际零增长，已经比过去五年好很多。</p>
+        </div>
+      </details>
+
+      <details class="faq-i"><summary>退休后卖房要注意什么</summary>
+        <div class="faq-b">
+          <p>最容易漏的是<b>卖了之后总得住</b>：卖房后要重新开始付房租，且随通胀涨。
+            漏掉这笔，「退休后卖房」就成了无成本的免费变现。</p>
+          <p>卖出成本方面：满五唯一免增值税与个税，FIRE 场景下持有期必然超过五年，
+            所以卖出端通常只剩中介费（卖方承担 1%，全担 2%）。</p>
+        </div>
+      </details>
+
+      <details class="faq-i"><summary>租金回报率低于贷款利率意味着什么</summary>
+        <div class="faq-b">
+          <p>意味着这套房每年有现金流缺口，要靠房价上涨或居住价值来补。
+            读数区把差值折成了具体金额。反过来，租金回报率高于贷款利率时，
+            按现金流口径每年反而是多出来的。</p>
+          <p>两个提醒。一是读数里的贷款利率按<b>商贷与公积金本金加权</b>算，不等于商贷利率本身；
+            全款没有贷款利率，此时要比的是「这笔钱放在投资组合里的收益率」与租金回报率。
+            二是租金回报率的分子如果还是默认租金，那它只是个全国均值占位数，
+            不能拿来下判断。</p>
+          <p>本模块只摆数字，不给「该买」或「该租」的结论。</p>
+        </div>
+      </details>
+
+      <details class="faq-i"><summary>首付比、贷款年限、利率这几个默认值的依据</summary>
+        <div class="faq-b">
+          <p><b>首付比</b>：全国下限 15%，2024-09-24 央行、金融监管总局起不再区分首套二套。
+            部分城市二套仍加码，以当地最新政策为准。四个档位是常见选择，滑块用来微调 ——
+            手里现金多、想少背贷款的人可以拉到 50% 以上。</p>
+          <p><b>贷款年限</b>：30 年是主流，也是这里的默认。上限 40 年（2026-08-28 央行、
+            金融监管总局意见），但文件只给上限不是标准，且受银行内控「年龄 + 年限 ≤ 70 岁」约束。</p>
+          <p><b>商贷利率</b>：首套主流执行 3.05%（5 年期以上 LPR 3.5%），各行各城差异 ±0.3pct。</p>
+          <p><b>公积金利率</b>：5 年以上首套 2.6%（人民银行，2025-05-08 起新发放执行），二套 3.075%。</p>
+          <p><b>付款方式</b>：组合贷是中国购房常态 —— 公积金按额度封顶，超出部分走商贷，
+            两笔分别算月供再相加。</p>
+        </div>
+      </details>
+
+      <details class="faq-i"><summary>公积金可贷上限填多少，额度不够会怎样</summary>
+        <div class="faq-b">
+          <p>填所在城市家庭（双缴存）上限，各城市差异极大：成都 120 万、武汉 150 万、上海 200 万、
+            北京 240 万，请按当地公积金中心公布的数字填。实际可贷额 =
+            min(城市上限, 账户余额倍数上限, 月缴存额还款能力上限)，实际额度可能更低。</p>
+          <p>纯公积金档位下，超出额度的部分没有别的来源，只能自己掏 —— 缺口自动进首付。
+            所以那时首付会明显高于「首付比 × 总价」，那不是算错。</p>
+        </div>
+      </details>
+
+      <details class="faq-i"><summary>子女模块：为什么要填「现在每年在孩子身上花多少」</summary>
+        <div class="faq-b">
+          <p>已出生的孩子按「档位成本 − 你声明的当前花费」计增量，因为你填的「当前年支出」里
+            已经有这笔钱了，模块只加差额。两边口径必须一致：档位是全口径
+            （饮食、居住分摊、教育、医疗、衣着都算），你只填学费和补习费的话，这个增量会偏高。
+            选档后会按档位预填，可以改。</p>
+          <p>还没出生的孩子不用填 —— 那条路径的口径天然正确。</p>
+          <p>如果读数里「本年因子女增加的支出」是负数，说明你声明的当前花费高于所选档位的成本，
+            模块的净效果是省钱。这多半是档选低了，换一个更贵的档，或把当前花费调低。</p>
+        </div>
+      </details>
+
+      <details class="faq-i"><summary>子女模块：22 岁之后、以及没算进去的那部分</summary>
+        <div class="faq-b">
+          <p>扣除项只做到孩子 22 岁，之后本模块不再产生任何支出。但你填的「当前年支出」里那笔钱
+            还在 —— 要不要跟着下调，由「退休后花多少」决定，本模块不替你凭空省钱。</p>
+          <p>模块只算现金支出，<b>不含父母的收入损失</b>。育娲 2024 版的量化是：
+            女性照料 0—4 岁孩子减少工作 2106 小时（约 6.3 万元），每生一孩女性工资率下降
+            12%—17%。那属于收入侧，对 FIRE 年份的影响可能比养育支出本身还大。</p>
+        </div>
+      </details>
+
+      <details class="faq-i"><summary>子女模块：档位、多孩折扣与育儿补贴的出处</summary>
+        <div class="faq-b">
+          <p><b>居住分摊</b>：育娲的养育成本含居住分摊，与「购房」模块直接相加会把居住那部分算两遍。
+            所以默认按 0.8 系数扣掉居住，只有你不打算用购房模块时才勾「按原始全口径计」。
+            大学段的住宿费是单列的，不受影响。</p>
+          <p><b>多孩折扣</b>：育娲 2026 版实证为第二孩 71.5%、第三孩 61.0%、第四孩及以上 37.1%
+            （含居住口径）。扣掉居住后折扣应当更浅，本模块取 0.80 / 0.70 / 0.45 ——
+            方向可靠，<b>幅度未证实</b>。</p>
+          <p><b>育儿补贴</b>：3600 元/年/孩，3 周岁以下，一孩二孩三孩同等、免征个税
+            （中办国办《育儿补贴制度实施方案》，2025-01-01 起）。名义定额，不随物价上调。</p>
+          <p><b>国际路线</b>：全程国际（0—22 岁 666 万）现实中不是主流，常见的是公立读到初中、
+            高中转国际、本科出国，转轨前按「小康公立」档走。这个选择点是路径依赖的 ——
+            进了国际体系很难回头（课程不衔接、无法高考）。</p>
+        </div>
+      </details>
+
+    </div>
+  </section>
+
+  <section class="sect">
     <div class="eyebrow">附录</div><h2>计算方法</h2>
     <div class="method" id="method"></div>
   </section>
@@ -321,5 +658,5 @@
     觉得有用就去 <a class="foot-star" href="https://github.com/ZnS77/fire-calculator" target="_blank" rel="noopener noreferrer">GitHub 点个 Star ★</a></span>
 </div>
 </div><!-- /wrap -->
-<script src="js/app.js?v=c13eebe0"></script>
+<script src="js/app.js?v=46716d55"></script>
 </body></html>

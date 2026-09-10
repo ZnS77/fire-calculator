@@ -1,6 +1,8 @@
-/* 界面绑定。所有计算逻辑在 engine / pension，本文件只负责读写 DOM。 */
+/* 界面绑定。所有计算逻辑在 engine / pension / child / house，本文件只负责读写 DOM。 */
 import * as E from './engine';
 import * as P from './pension';
+import * as CH from './child';
+import * as HO from './house';
 import * as C from './charts';
 import { cny, cnyFull, parseAmount, pct } from './format';
 import { METHOD_HTML } from './method';
@@ -9,13 +11,22 @@ import { Age, CashEvent, FireInput, SimResult, SolveResult, age, rate, real } fr
 const STORE_KEY = 'fire-calc-v1';
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
+/** 百分点显示。医疗溢价是「相对 CPI 的差」，写成 pp 而不是 %，免得和绝对值混起来。 */
+const pp = (r: number): string => '+' + (r * 100).toFixed(1) + 'pp';
+
 interface PensionCfg {
   on: boolean; joinAge: number; socialAvg: number; baseMode: P.BaseMode;
   monthlyIncome: number; socialGrowth: number; accountRate: number;
   claimAge: number; cola: number; keepPaying: boolean;
 }
 
-interface State { input: FireInput; pension: PensionCfg; showReal: boolean; }
+/** 生活模块与养老金一样，各自独立存配置，不往 input.events 里塞东西 ——
+ * 用户手填的时间轴事件必须始终只有用户自己填的那几行。 */
+interface State {
+  input: FireInput; pension: PensionCfg;
+  child: CH.ChildCfg; house: HO.HouseCfg;
+  showReal: boolean;
+}
 
 const DEFAULT_PENSION: PensionCfg = {
   on: false, joinAge: 22, socialAvg: 12434, baseMode: 'income',
@@ -24,11 +35,15 @@ const DEFAULT_PENSION: PensionCfg = {
   claimAge: 63, cola: P.COLA.neutral as number, keepPaying: false
 };
 
-let st: State = {
+const freshState = (): State => ({
   input: structuredClone(E.DEFAULTS),
   pension: { ...DEFAULT_PENSION },
+  child: structuredClone(CH.DEFAULT_CHILD),
+  house: { ...HO.DEFAULT_HOUSE },
   showReal: true
-};
+});
+
+let st: State = freshState();
 
 // ---- 持久化（读写都包 try/catch）----------------------------------------
 function save(): void {
@@ -39,10 +54,52 @@ function load(): void {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return;
     const p = JSON.parse(raw) as Partial<State>;
-    if (p.input)   st.input   = { ...E.DEFAULTS, ...p.input };
+    if (p.input)   st.input   = migrate({ ...E.DEFAULTS, ...p.input });
     if (p.pension) st.pension = { ...DEFAULT_PENSION, ...p.pension };
+    // 老存档没有这两个字段，浅合并后就是默认值（两个模块都 enabled: false，零影响）
+    if (p.child)   st.child   = { ...CH.DEFAULT_CHILD, ...p.child };
+    if (p.house)   st.house   = HO.migrateCfg(p.house);
     if (typeof p.showReal === 'boolean') st.showReal = p.showReal;
   } catch { /* 坏数据就用默认值 */ }
+}
+
+/** 老存档 / 老导出 JSON 的字段迁移。
+ *
+ * `medInflation`（医疗通胀绝对值）在 2026-09 改成了 `medPremium`（相对 CPI 的溢价）。
+ * 展开式 `{ ...DEFAULTS, ...p.input }` 会把已经不存在的老字段原样带进来，
+ * 而 medPremium 拿到新默认值 —— 存档里于是同时躺着两个字段，引擎只读新的。
+ * 这里把老字段删掉，避免它一直跟着导出的 JSON 传播。
+ *
+ * 不把老值反解成 premium（`medInflation − cpi`）是故意的：老的 6% 本身就是错的
+ * （依据用错了口径，见 docs/参数依据.md），反解只会把错误换个形式保留下来。
+ * 让它回到新默认的 2.0pp 更好。 */
+function migrate(i: FireInput): FireInput {
+  delete (i as Partial<FireInput> & { medInflation?: unknown }).medInflation;
+  return i;
+}
+
+/* 购房配置的字段迁移在 house.ts（`HO.migrateCfg`）：它要懂老的城市档位面积，
+ * 是购房域的知识，放在那边才测得到。那次是**换算**不是丢弃，理由见函数注释。 */
+
+// ---- 生活模块 → 现金流事件 -----------------------------------------------
+/* 两个模块的外部参数刻意不复用 FireInput 的字段名，所以在这里做一次显式映射。
+ * 注意 medPremium 是「相对 CPI 的溢价」，和这两个模块都无关，不要误传。 */
+const childCtx = (i: FireInput): CH.ChildCtx =>
+  ({ currentAge: i.currentAge, cpi: i.cpi, spendGrowth: i.personalInflation });
+
+const houseCtx = (i: FireInput): HO.HouseCtx =>
+  ({ currentAge: i.currentAge, deathAge: i.deathAge,
+     cpi: i.cpi, spendInflation: i.personalInflation });
+
+/** 把子女 / 购房事件并进一份 input。两个模块的事件是**静态**的（只依赖 input 本身，
+ * 不依赖 FIRE 年龄），所以先注入、再交给要迭代求不动点的 solveWithPension。
+ * 两个模块都关闭时返回原对象，对现有结果零影响。 */
+function withModules(input: FireInput): FireInput {
+  const evs = [
+    ...CH.childEvents(st.child, childCtx(input)),
+    ...HO.houseEvents(st.house, houseCtx(input))
+  ];
+  return evs.length === 0 ? input : { ...input, events: [...input.events, ...evs] };
 }
 
 // ---- 养老金 → 现金流事件 -------------------------------------------------
@@ -50,9 +107,12 @@ function load(): void {
  * 实测两轮即收敛：第一轮用无养老金的解当停缴年龄，第二轮用它重算。 */
 /** 返回 used：最终真正拿去求解的那份 input（已注入养老金事件）。
  * 结论区的二次求解必须用它，否则口径和展示出来的 FIRE 年龄对不上。 */
-function solveWithPension(input: FireInput, pc: PensionCfg): {
+function solveWithPension(input0: FireInput, pc: PensionCfg): {
   res: SolveResult; pension: P.PensionResult | null; used: FireInput;
 } {
+  // 敏感性扫描会改 deathAge / reserve 再调进来，购房模块的事件区间依赖 deathAge，
+  // 所以注入放在这里而不是调用方 —— 每一次扫描都用当时那份 input 重新生成事件。
+  const input = withModules(input0);
   if (!pc.on) return { res: E.solve(input), pension: null, used: input };
   let stopAge: number = E.solve(input).fireAge ?? input.currentAge;
   let pr = projectPension(input, pc, stopAge);
@@ -112,6 +172,8 @@ function render(): void {
 
   renderVerdict(res, d, pr, used);
   renderPensionOut(pr);
+  renderChildOut();
+  renderHouseOut();
 
   C.assetPath($('c1'), $('t1'), {
     rows: sim.rows, showReal: st.showReal, fireAge: res.fireAge,
@@ -172,10 +234,30 @@ function renderVerdict(
     hero = '你现在就可以退休';
     sub = `资产已经够撑到 ${input.deathAge} 岁，并留下应急金`;
   } else if (res.reason === 'never') {
-    const gap = (sim.targetNominal as number) - (sim.endNominal as number);
     hero = '当前参数下无法 FIRE';
-    sub = `干到 ${input.deathAge} 岁仍有缺口`;
-    lines += line('资金缺口', `<b>${cny(gap)}</b>`, true);
+    // 失败有两种，成因和解法完全不同，不能共用一句「缺口」：
+    //
+    //   1. 期末不够 —— 一路没断过，只是撑到规划终止年龄时凑不齐应急金。
+    //   2. 中途断供 —— 某一年资产被打成负数（典型是购房首付、或一笔大额事件
+    //      落在资产还没攒起来的年份）。这种情况下曲线后来可能靠工资涨回来，
+    //      期末余额甚至远高于应急金 —— 此时 targetNominal − endNominal 是个
+    //      负数，把它当「缺口」显示出来就是一句胡话。
+    //
+    // 之前这里只写了第 1 种。没有大额一次性支出时几乎碰不到第 2 种，
+    // 购房模块进来之后它变成了常见情形。
+    const bankruptAge = sim.bankruptAge as number | null;
+    if (bankruptAge !== null) {
+      const low = sim.rows.reduce((m, r) =>
+        (r.endNominal as number) < (m.endNominal as number) ? r : m, sim.rows[0]!);
+      sub = `${bankruptAge} 岁那年资金链就断了`;
+      lines += line('最低点', `<b>${cny(low.endNominal)}</b>出现在 ${low.age} 岁`, true);
+      lines += line('这不是「攒不够」', '是中途某一年付不出来 —— 期末余额反而是 '
+        + cny(sim.endNominal) + '。先把那笔支出往后挪或调小，再看退休年龄');
+    } else {
+      const gap = (sim.targetNominal as number) - (sim.endNominal as number);
+      sub = `干到 ${input.deathAge} 岁仍有缺口`;
+      lines += line('资金缺口', `<b>${cny(gap)}</b>`, true);
+    }
     lines += line('可行的方向', '提高收入 · 压缩支出 · 降低预留金 · 调低预期收益');
   } else {
     hero = `你可以在 <em>${res.fireAge}</em> 岁退休`;
@@ -209,7 +291,8 @@ function renderVerdict(
   if ((input.reserve as number) > 0) {
     lines += line('应急金的真实代价',
       `<b>${cny(reserveNominal)}</b>今天的 ${cny(input.reserve)}，` +
-      `${years} 年后按医疗通胀 ${pct(input.medInflation)} 滚成这个数`);
+      `${years} 年后按医疗通胀 ${pct(input.cpi + input.medPremium)}` +
+      `（CPI ${pct(input.cpi)} + 溢价 ${pp(input.medPremium)}）滚成这个数`);
   }
   if (pr) {
     lines += pr.qualified
@@ -353,6 +436,113 @@ function renderPensionOut(pr: P.PensionResult | null): void {
     (spread > 0
       ? `<div class="hint">记账利率比社平增长低 ${(spread * 100).toFixed(2)}pp，
          个人账户那部分待遇会被持续稀释 —— 这是结构性的，不是参数没调好。</div>`
+      : '');
+}
+
+/** 子女模块的读数。
+ *
+ * 这里最重要的一个数是「本年因子女增加的支出」。用户看到它就能立刻判断离不离谱，
+ * 从而发现自己是不是把孩子的开销算了两遍 —— 比在输入框旁边写任何提示都管用。
+ * 它可能是负数（用户声明的当前花费大于所选档位的成本），那不是 bug，是「档选低了」，
+ * 所以不 clamp 到 0，如实显示并解释。 */
+function renderChildOut(): void {
+  const box = document.getElementById('childOut');
+  if (!box) return;
+  const cfg = st.child;
+  if (!cfg.enabled) { box.innerHTML = ''; return; }
+
+  const ctx = childCtx(st.input);
+  const delta = CH.childSpendThisYear(cfg, ctx);
+  const evs = CH.childEvents(cfg, ctx);
+  // 今日购买力口径的合计：金额 × 年数，不叠通胀、不贴现。
+  // 与卡片上的「0—22 岁合计」同口径，只是把补贴与已计入部分的抵扣也算了进去。
+  const netTotal = evs.reduce(
+    (s, e) => s - (e.amount as number) * (e.endAge - e.startAge), 0);
+  const lastAge = evs.reduce((m, e) => Math.max(m, e.endAge as number), st.input.currentAge as number);
+  const hasBorn = cfg.children.some(c => c.kind === 'born');
+
+  box.innerHTML =
+    `<table><tbody>
+      <tr><td><b>本年因子女增加的支出</b></td>
+        <td class="big">${cny(delta)}</td></tr>
+      <tr><td>今后净增合计（今日购买力）</td><td>${cny(netTotal)}</td></tr>
+      <tr><td>最后一笔</td><td>${Math.round(lastAge - 1)} 岁</td></tr>
+      <tr><td>生成的现金流条目</td><td>${evs.length} 项</td></tr>
+    </tbody></table>` +
+    (delta < 0
+      ? `<div class="hint"><span class="pill bad">负数</span>
+         你声明的当前花费高于所选档位的成本，净效果是<b>省钱</b> —— 多半是档选低了。</div>`
+      : '') +
+    (hasBorn
+      ? `<div class="hint">已出生的孩子按「档位成本 − 你声明的当前花费」计增量，两边口径必须一致。</div>`
+      : '');
+}
+
+/** 购房模块的读数。三个利率并排摆，不给「该买」或「该租」的结论，只摆数字。 */
+function renderHouseOut(): void {
+  const box = document.getElementById('houseOut');
+  if (!box) return;
+  const cfg = st.house;
+  if (!cfg.enabled) { box.innerHTML = ''; return; }
+
+  const r = HO.project(cfg, houseCtx(st.input));
+  const cash = cfg.payMode === 'cash';
+  const gapYears = cfg.buyAge - (st.input.currentAge as number);
+  const total = HO.totalPrice(cfg);
+  // 回报率旁边必须挂住这条：默认租金是全国均值换算来的，跟具体这套房没关系
+  const yieldNote = cfg.marketMonthlyRent === HO.rentFor(cfg.areaSqm)
+    ? `月租金还是全国均值换算来的默认值，与你这套房无关 ——
+       这个回报率只是占位数，查到实际租金就改掉。`
+    : '';
+
+  box.innerHTML =
+    `<div class="trio">
+      <div class="trio-i"><div class="trio-k">租金回报率</div>
+        <div class="trio-v">${pct(r.rentYield, 2)}</div></div>
+      <div class="trio-i"><div class="trio-k">贷款利率${cash ? '' : '（本金加权）'}</div>
+        <div class="trio-v">${cash ? '—' : pct(r.loanRate, 2)}</div></div>
+      <div class="trio-i"><div class="trio-k">扣通胀后实际</div>
+        <div class="trio-v">${cash ? '—' : pct(r.realLoanRate, 2)}</div></div>
+     </div>` +
+    (cash
+      ? `<div class="hint">全款没有贷款利率。要比的是投资组合收益率 ${pct(st.input.rWork, 1)}
+         与租金回报率 ${pct(r.rentYield, 2)}。</div>`
+      : `<div class="hint">贷款利率按<b>商贷与公积金本金加权</b>（商贷 ${pct(cfg.comRate, 2)} /
+         公积金 ${pct(cfg.hpfRate, 2)}）。${r.cashGap > 0
+            ? `它比租金回报率高 ${((r.loanRate - r.rentYield) * 100).toFixed(2)}pp，
+               对应每年约 <b>${cny(r.cashGap)}</b> 的现金流缺口。`
+            : `它已低于租金回报率，按现金流口径每年反而多出约 <b>${cny(-r.cashGap)}</b>。`}</div>`) +
+    (yieldNote ? `<div class="hint"><span class="pill bad">默认值</span> ${yieldNote}</div>` : '') +
+    `<table><tbody>
+      <tr><td>单价 × 面积</td><td>${Math.round(cfg.pricePerSqm).toLocaleString('zh-CN')} 元/㎡
+        × ${cfg.areaSqm}㎡ = <b>${cny(total)}</b></td></tr>
+      <tr><td>购房当年总价</td><td>${cny(r.priceAtBuy)}${
+        gapYears > 0 && (cfg.priceGrowth as number) !== 0
+          ? ` <span class="hint" style="margin:0;display:inline">${cfg.buyAge} 岁那年的名义价，
+              今天是 ${cny(total)}</span>` : ''}</td></tr>
+      <tr><td>首付</td><td class="big">${cny(r.downPayment)}</td></tr>
+      <tr><td>税费（契税+中介）</td><td>${cny(r.buyCost)}</td></tr>
+      ${cash ? '' : `<tr><td>贷款（商贷 / 公积金）</td>
+        <td>${cny(r.comPrincipal)} / ${cny(r.hpfPrincipal)}</td></tr>
+      <tr><td><b>月供合计（名义固定）</b></td><td class="big">${cnyFull(r.monthlyTotal)} / 月</td></tr>
+      <tr><td>名义总利息</td><td>${cny(r.interestTotal)}</td></tr>`}
+      <tr><td>年持有成本（物业+维修）</td><td>${cny(r.annualHoldCost)}</td></tr>
+      <tr><td>每月住房净增</td><td>${cnyFull(r.netMonthlyDelta)} / 月</td></tr>
+    </tbody></table>` +
+    (r.hpfShortfall > 0
+      ? `<div class="hint"><span class="pill bad">额度不足</span>
+         超出额度的 <b>${cny(r.hpfShortfall)}</b> 自动进了首付，所以首付高于
+         「首付比 × 总价」（${cny(r.priceAtBuy * (cfg.downRatio as number))}）。这不是算错。</div>`
+      : '') +
+    (cash ? '' :
+      `<div class="hint">月供<b>名义固定</b>：按当前 CPI ${pct(st.input.cpi, 1)}，
+         第 ${cfg.loanYears} 年那笔 ${cnyFull(r.monthlyTotal)} 只相当于今天的
+         <b>${cnyFull(r.lastPaymentToday)}</b>，整个还款期的实际负担比名义总额低
+         <b>${pct(r.inflationEatenRatio, 1)}</b>。</div>`) +
+    (cfg.sellOn && cfg.sellAge > cfg.buyAge
+      ? `<div class="hint">${cfg.sellAge} 岁卖出：名义毛价 ${cny(r.sellGross)}，
+         扣卖出成本与剩余贷款 ${cny(r.sellDebt)} 后净得 <b>${cny(r.sellNet)}</b>，
+         之后重新开始付房租。</div>`
       : '');
 }
 
@@ -564,9 +754,60 @@ function bindIncomeModel(): void {
  * 换主题必须重绘 —— 否则会留着上一个主题的配色。 */
 let redrawSparks: (() => void) | null = null;
 
+/** 市场假设：三档情景预设卡 + 折叠的五个系数微调。
+ *
+ * 为什么做成卡：这五个系数不独立，真正决定结果的是实际收益率（名义 ÷ 通胀）。
+ * 五个滑块并排摆着，用户很容易调出「低利率 + 高通胀」的滞胀组合而不自知，
+ * 退休期实际收益变成负数，FIRE 年龄凭空多推 5 年（见 docs/参数依据.md）。
+ * 所以卡片上直接把退休期**实际**收益率印出来 —— 那才是真正在起作用的量。
+ */
+function bindMarketPresets(): void {
+  const grid = $('marketPresets');
+
+  grid.innerHTML = E.MARKET_PRESETS.map(p => {
+    const rr = E.realRate(p.rRetire, p.personalInflation);
+    return `<button type="button" class="preset preset--nospark" data-k="${p.key}" aria-pressed="false">
+       <span class="preset-txt"><span class="preset-n">${p.name}</span>
+       <span class="preset-w">${p.who}</span>
+       <span class="preset-k">收益 ${pct(p.rWork, 1)} / ${pct(p.rRetire, 1)} · 通胀 ${pct(p.personalInflation, 1)}
+         · 退休期实际 ${rr >= 0 ? '+' : '−'}${pct(Math.abs(rr), 2)}</span></span>
+     </button>`;
+  }).join('');
+
+  // 用户拖任一滑块后，反查五元组还落不落在某一档上；不落就全部取消选中。
+  const sync = (): void => {
+    const cur = E.matchMarketPreset(st.input)?.key ?? null;
+    grid.querySelectorAll<HTMLElement>('.preset').forEach(b => {
+      b.setAttribute('aria-pressed', String(b.dataset['k'] === cur));
+    });
+  };
+
+  grid.addEventListener('click', e => {
+    const k = (e.target as HTMLElement).closest<HTMLElement>('.preset')?.dataset['k'];
+    const p = E.MARKET_PRESETS.find(x => x.key === k);
+    if (!p) return;
+    // 一次写入四个值：只改一部分就是那个滞胀陷阱本身。
+    // 医疗通胀不在其中，但它是 cpi + medPremium，改了 cpi 就已经跟着变了。
+    st.input.cpi = p.cpi;
+    st.input.personalInflation = p.personalInflation;
+    st.input.rWork = p.rWork;
+    st.input.rRetire = p.rRetire;
+    syncAllRanges();          // 滑块还停在旧位置，必须刷回去
+    sync();
+    schedule();
+  });
+
+  sync();
+  syncMarketPresets = sync;
+}
+
+/** 由 bindMarketPresets 注入，供 bindRange 在用户拖动滑块后回查选中态。 */
+let syncMarketPresets: (() => void) | null = null;
+
 /** 折叠块收起时，在标题右侧显示当前值摘要，不用展开就能看见 */
 function renderBlockSummaries(): void {
   const i = st.input, p = st.pension;
+  const mkt = E.matchMarketPreset(i);
   const sums: Record<string, string> = {
     '我的基本情况': `${i.currentAge}岁 · ${cny(i.annualIncome)}/年 · 存 ${pct((i.annualIncome - i.annualSpend) / Math.max(1, i.annualIncome), 0)}`,
     '收入模型': i.incomeModel.kind === 'simple'
@@ -574,9 +815,16 @@ function renderBlockSummaries(): void {
       : (E.INCOME_PRESETS.find(p => p.key === (i.incomeModel as {preset:string}).preset)?.name ?? '曲线'),
     '我打算活到几岁': `${i.deathAge} 岁`,
     '我要留多少应急金': cny(i.reserve),
-    '市场假设': `${pct(i.rWork, 1)} / ${pct(i.rRetire, 1)} · 通胀 ${pct(i.personalInflation, 1)}`,
+    '市场假设': mkt ? mkt.name + '档'
+      : `自定义 · ${pct(i.rWork, 1)} / ${pct(i.rRetire, 1)} · 通胀 ${pct(i.personalInflation, 1)}`,
     '退休后的支出曲线': i.smileOn ? '微笑曲线已开' : '恒定实际支出',
     '社保养老金': p.on ? `${p.claimAge} 岁起领` : '未计入',
+    '子女教育': st.child.enabled
+      ? `${st.child.children.length} 个 · ${CH.childPreset(st.child.tier).name}` : '未计入',
+    '购房': st.house.enabled
+      ? `${Math.round(st.house.pricePerSqm).toLocaleString('zh-CN')}/㎡ × ` +
+        `${st.house.areaSqm}㎡ · ${cny(HO.totalPrice(st.house))}`
+      : '未计入',
     '时间轴事件': i.events.filter(e => e.enabled).length
       ? `${i.events.filter(e => e.enabled).length} 项` : '无'
   };
@@ -593,7 +841,12 @@ function schedule(): void {
 }
 
 type NumKey = 'currentAge' | 'deathAge' | 'incomeGrowth' | 'cpi' | 'personalInflation'
-  | 'medInflation' | 'rWork' | 'rRetire' | 'retireSpendRatio';
+  | 'medPremium' | 'rWork' | 'rRetire' | 'retireSpendRatio';
+
+/** 每个 bindRange 注册进来的「把 st.input 的当前值刷回滑块 DOM」。
+ * 预设卡一次改多个参数，改完必须统一刷一遍，否则滑块还停在旧位置。 */
+const rangeSyncers: Array<() => void> = [];
+function syncAllRanges(): void { for (const f of rangeSyncers) f(); }
 
 /** 滑块。isPct = 滑块以百分数计，写回 input 时除以 100。 */
 function bindRange(key: NumKey, isPct: boolean, fmt?: (v: number) => string): void {
@@ -608,8 +861,13 @@ function bindRange(key: NumKey, isPct: boolean, fmt?: (v: number) => string): vo
   r.addEventListener('input', () => {
     const n = parseFloat(r.value);
     (st.input[key] as number) = isPct ? n / 100 : n;
-    show(); schedule();
+    // 刷全部而不只刷自己：医疗溢价旁边显示的换算绝对值（= CPI + 溢价）依赖 cpi，
+    // 拖 CPI 滑块时那个数必须跟着走。刷一遍只是把 DOM 写成 st.input 的当前值，幂等。
+    syncAllRanges();
+    syncMarketPresets?.();   // 手动微调后预设卡应变成「都不选中」
+    schedule();
   });
+  rangeSyncers.push(show);
   show();
 }
 
@@ -626,8 +884,10 @@ function bindAmount(key: AmtKey): void {
   show();
 }
 
+/** 返回「把选中态刷回 DOM」的函数：同一个值若还挂着别的控件（如首付比例的滑块），
+ * 那个控件改完要能回来把 chips 的选中态刷一遍。 */
 function chips(hostId: string, get: () => string | number,
-               set: (v: string) => void): void {
+               set: (v: string) => void): () => void {
   const host = $(hostId);
   const sync = (): void => {
     host.querySelectorAll<HTMLElement>('.chip').forEach(c => {
@@ -641,6 +901,262 @@ function chips(hostId: string, get: () => string | number,
     sync(); schedule();
   });
   sync();
+  return sync;
+}
+
+/** 通用滑块绑定。bindRange 只认 st.input 的字段，生活模块的值不在那上面，
+ * 所以这里走 get/set 闭包。返回「把当前值刷回 DOM」的函数，供预设卡改完统一刷新。 */
+function bindNum(
+  id: string, get: () => number, set: (v: number) => void,
+  fmt: (v: number) => string, after?: () => void
+): () => void {
+  const r = $<HTMLInputElement>('r_' + id);
+  const v = $('v_' + id);
+  const show = (): void => { r.value = String(get()); v.textContent = fmt(get()); };
+  r.addEventListener('input', () => {
+    set(parseFloat(r.value)); show(); after?.(); schedule();
+  });
+  show();
+  return show;
+}
+
+/** 通用金额输入框绑定，同上。聚焦时显示裸数字，失焦后回到「50 万」这类可读写法。 */
+function bindAmt(
+  id: string, get: () => number, set: (v: number) => void, after?: () => void
+): () => void {
+  const i = $<HTMLInputElement>('i_' + id);
+  const show = (): void => { i.value = cnyFull(get()).replace('¥', ''); };
+  i.addEventListener('change', () => {
+    set(parseAmount(i.value)); show(); after?.(); schedule();
+  });
+  i.addEventListener('focus', () => { i.value = String(Math.round(get())); });
+  show();
+  return show;
+}
+
+/** 子女教育：四档预设卡 + 每个孩子的现状 + 口径开关。 */
+function bindChild(): void {
+  const cfg = (): CH.ChildCfg => st.child;
+  const box = $('childBox');
+  const on = $<HTMLInputElement>('c_childOn');
+  const syncOn = (): void => { box.style.display = cfg().enabled ? '' : 'none'; };
+  on.checked = cfg().enabled;
+  on.addEventListener('change', () => { cfg().enabled = on.checked; syncOn(); schedule(); });
+  syncOn();
+
+  const grid = $('childPresets');
+  const intlField = $('intlField');
+
+  const drawPresets = (): void => {
+    grid.innerHTML = CH.CHILD_PRESETS.map(p => {
+      // 合计随「是否扣居住」「转国际的年龄」变化，所以每次都现算，不缓存
+      const total = CH.childLifetimeTotal(cfg(), p.key);
+      return `<button type="button" class="preset preset--nospark" data-k="${p.key}"
+         aria-pressed="${String(p.key === cfg().tier)}">
+         <span class="preset-txt"><span class="preset-n">${p.name}</span>
+         <span class="preset-w">${p.who}</span>
+         <span class="preset-k">0—22 岁合计 ${cny(total)} · 教育通胀溢价 ${pp(p.premium)}</span>
+         </span></button>`;
+    }).join('');
+    intlField.style.display = cfg().tier === 'international' ? '' : 'none';
+  };
+
+  const kids = $('childKids');
+  /** 某个孩子按当前档位、当前年龄应有的年成本，用来预填「现在每年花多少」 */
+  const suggest = (c: CH.ChildSpec, i: number): number =>
+    c.kind === 'born' ? Math.round(CH.childAnnualCost(cfg(), c.age, i + 1)) : 0;
+
+  const drawKids = (): void => {
+    kids.innerHTML = '<table><tbody>' + cfg().children.map((c, i) => {
+      const born = c.kind === 'born';
+      return `<tr>
+        <td style="padding-left:0"><select data-i="${i}" data-f="kind">
+          <option value="born"${born ? ' selected' : ''}>已出生</option>
+          <option value="planned"${born ? '' : ' selected'}>还没出生</option>
+        </select></td>
+        <td style="white-space:nowrap"><input type="number" data-i="${i}" data-f="n"
+             min="0" max="${born ? 22 : 20}" step="1"
+             value="${born ? c.age : c.yearsUntilBirth}" style="width:54px">
+          ${born ? '岁' : '年后生'}</td>
+        <td>${born
+          ? `<input type="text" data-i="${i}" data-f="spend" value="${Math.round(c.currentSpend)}"
+               style="min-width:76px">`
+          : '—'}</td>
+        <td style="padding-right:0"><button class="xbtn" data-del="${i}" title="删除">×</button></td>
+      </tr>`;
+    }).join('') + '</tbody></table>';
+
+    kids.querySelectorAll<HTMLSelectElement>('select').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const i = Number(sel.dataset['i']);
+        const old = cfg().children[i];
+        if (!old) return;
+        // 换类型就整条重建：两种形态的字段完全不同，保留旧字段只会留下脏数据
+        cfg().children[i] = sel.value === 'born'
+          ? { kind: 'born', age: 0, currentSpend: 0 }
+          : { kind: 'planned', yearsUntilBirth: 2 };
+        const now = cfg().children[i];
+        if (now && now.kind === 'born') now.currentSpend = suggest(now, i);
+        drawKids(); schedule();
+      });
+    });
+    kids.querySelectorAll<HTMLInputElement>('input').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const i = Number(inp.dataset['i']);
+        const c = cfg().children[i];
+        if (!c) return;
+        if (inp.dataset['f'] === 'n') {
+          const n = Math.max(0, Math.round(Number(inp.value)));
+          if (c.kind === 'born') c.age = n; else c.yearsUntilBirth = n;
+        } else if (c.kind === 'born') {
+          c.currentSpend = parseAmount(inp.value);
+        }
+        drawKids(); drawPresets(); schedule();
+      });
+    });
+    kids.querySelectorAll<HTMLButtonElement>('[data-del]').forEach(b => {
+      b.addEventListener('click', () => {
+        if (cfg().children.length <= 1) return;   // 至少留一个，否则整个模块没有意义
+        cfg().children.splice(Number(b.dataset['del']), 1);
+        drawKids(); schedule();
+      });
+    });
+  };
+
+  $('addKid').addEventListener('click', () => {
+    cfg().children.push({ kind: 'planned', yearsUntilBirth: 2 });
+    drawKids(); schedule();
+  });
+
+  grid.addEventListener('click', e => {
+    const k = (e.target as HTMLElement).closest<HTMLElement>('.preset')?.dataset['k'];
+    if (!k) return;
+    cfg().tier = k as CH.ChildTierKey;
+    // 已出生的孩子若还没填过当前花费，按新档位预填一个 —— 填过的不动
+    cfg().children.forEach((c, i) => {
+      if (c.kind === 'born' && c.currentSpend === 0) c.currentSpend = suggest(c, i);
+    });
+    drawPresets(); drawKids(); premiumHint(); schedule();
+  });
+
+  bindNum('childIntlFrom', () => cfg().intlFromAge,
+    v => { cfg().intlFromAge = v; }, v => v + ' 岁', drawPresets);
+
+  const ck = (id: string, get: () => boolean, set: (v: boolean) => void,
+              after?: () => void): void => {
+    const c = $<HTMLInputElement>(id);
+    c.checked = get();
+    c.addEventListener('change', () => { set(c.checked); after?.(); schedule(); });
+  };
+  ck('c_childHousing', () => cfg().includeHousing,
+     v => { cfg().includeHousing = v; }, drawPresets);
+  ck('c_childSibling', () => cfg().siblingDiscount, v => { cfg().siblingDiscount = v; });
+  ck('c_childSubsidy', () => cfg().subsidy, v => { cfg().subsidy = v; });
+
+  // 教育通胀溢价：默认跟随档位，勾选后才允许覆盖
+  const premBox = $('childPremiumBox');
+  const premOn = $<HTMLInputElement>('c_childPremiumOn');
+  const showPrem = bindNum('childPremium',
+    () => ((cfg().premiumOverride ?? CH.childPreset(cfg().tier).premium) as number) * 100,
+    v => { cfg().premiumOverride = rate(v / 100); },
+    v => `+${v.toFixed(1)}pp（= ${pct(st.input.cpi + v / 100)}）`,
+    () => premiumHint());
+  function premiumHint(): void {
+    const p = CH.childPreset(cfg().tier);
+    const eff = (cfg().premiumOverride ?? p.premium) as number;
+    premBox.style.display = cfg().premiumOverride === null ? 'none' : '';
+    showPrem();
+    $('h_childPremium').innerHTML = cfg().premiumOverride === null
+      ? `当前跟随「${p.name}」档：${pp(p.premium)}，即年涨 ${pct(st.input.cpi + p.premium)}。`
+      : `覆盖为 ${pp(eff)}，即年涨 ${pct(st.input.cpi + eff)}（档位默认是 ${pp(p.premium)}）。`;
+  }
+  premOn.checked = cfg().premiumOverride !== null;
+  premOn.addEventListener('change', () => {
+    cfg().premiumOverride = premOn.checked
+      ? CH.childPreset(cfg().tier).premium : null;
+    premiumHint(); schedule();
+  });
+
+  drawPresets();
+  drawKids();
+  premiumHint();
+}
+
+/** 购房：单价 × 面积 + 付款方式 + 微调 + 可选的退休后卖房。 */
+function bindHouse(): void {
+  const cfg = (): HO.HouseCfg => st.house;
+  const box = $('houseBox');
+  const on = $<HTMLInputElement>('c_houseOn');
+  const syncOn = (): void => { box.style.display = cfg().enabled ? '' : 'none'; };
+  on.checked = cfg().enabled;
+  on.addEventListener('change', () => { cfg().enabled = on.checked; syncOn(); schedule(); });
+  syncOn();
+
+  const syncers: Array<() => void> = [];
+  const refresh = (): void => { for (const f of syncers) f(); };
+
+  /** 总价是派生显示，不是输入框 —— 有第三个可编辑的数，就会出现
+   * 「单价 × 面积 ≠ 总价」的不自洽状态，而那时三个数里必然有一个是错的。
+   * 为什么这么定、100㎡ 的来历、改面积会连带重算月租金，都在附录的「常见问题」里。 */
+  const totalHint = (): void => {
+    const c = cfg();
+    $('h_houseTotal').innerHTML =
+      `总价 = <b>${cny(HO.totalPrice(c))}</b>
+       （${Math.round(c.pricePerSqm).toLocaleString('zh-CN')} 元/㎡ × ${c.areaSqm}㎡）`;
+  };
+
+  chips('payModeChips', () => cfg().payMode, v => { cfg().payMode = v as HO.PayMode; });
+  chips('priceGrowthChips', () => cfg().priceGrowth as number,
+        v => { cfg().priceGrowth = rate(Number(v)); });
+  chips('loanYearsChips', () => cfg().loanYears,
+        v => { cfg().loanYears = Number(v); });
+
+  // 单价：滑块与输入框绑同一个值。滑块步进 1 万，低线城市的 5,000、1.3 万落不到刻度上，
+  // 必须留一个能直接打字的入口 —— 两个控件互相同步由 refresh() 统一做。
+  const afterUnit = (): void => { refresh(); totalHint(); };
+  syncers.push(bindNum('houseUnit', () => cfg().pricePerSqm,
+    v => { cfg().pricePerSqm = v; },
+    v => Math.round(v).toLocaleString('zh-CN') + ' 元/㎡', afterUnit));
+  syncers.push(bindAmt('houseUnit', () => cfg().pricePerSqm,
+    v => { cfg().pricePerSqm = v; }, afterUnit));
+  syncers.push(bindNum('houseArea', () => cfg().areaSqm,
+    v => { st.house = HO.applyArea(cfg(), v); }, v => v + '㎡', afterUnit));
+
+  syncers.push(bindAmt('houseRent', () => cfg().marketMonthlyRent,
+    v => { cfg().marketMonthlyRent = v; }));
+  syncers.push(bindAmt('houseHpfCap', () => cfg().hpfCap,
+    v => { cfg().hpfCap = v; }));
+  syncers.push(bindAmt('houseMonthly', () => cfg().currentMonthlyHousing,
+    v => { cfg().currentMonthlyHousing = v; }));
+  syncers.push(bindAmt('housePostRent', () => cfg().postSaleMonthlyRent,
+    v => { cfg().postSaleMonthlyRent = v; }));
+
+  // 首付比例：四档常见值 + 滑块微调，两个控件绑同一个值
+  const syncDown = chips('downRatioChips', () => cfg().downRatio as number,
+    v => { cfg().downRatio = rate(Number(v)); refresh(); });
+  syncers.push(bindNum('houseDown', () => (cfg().downRatio as number) * 100,
+    v => { cfg().downRatio = rate(v / 100); }, v => v.toFixed(0) + '%', syncDown));
+  syncers.push(bindNum('houseComRate', () => (cfg().comRate as number) * 100,
+    v => { cfg().comRate = rate(v / 100); }, v => v.toFixed(2) + '%'));
+  syncers.push(bindNum('houseHpfRate', () => (cfg().hpfRate as number) * 100,
+    v => { cfg().hpfRate = rate(v / 100); }, v => v.toFixed(2) + '%'));
+  syncers.push(bindNum('houseBuyAge', () => cfg().buyAge,
+    v => { cfg().buyAge = v; }, v => v + ' 岁'));
+  syncers.push(bindNum('houseSellAge', () => cfg().sellAge,
+    v => { cfg().sellAge = v; }, v => v + ' 岁'));
+  syncers.push(bindNum('houseSellCost', () => (cfg().sellCostRate as number) * 100,
+    v => { cfg().sellCostRate = rate(v / 100); }, v => v.toFixed(1) + '%'));
+
+  const sellBox = $('houseSellBox');
+  const sellOn = $<HTMLInputElement>('c_houseSell');
+  const syncSell = (): void => { sellBox.style.display = cfg().sellOn ? '' : 'none'; };
+  sellOn.checked = cfg().sellOn;
+  sellOn.addEventListener('change', () => {
+    cfg().sellOn = sellOn.checked; syncSell(); schedule();
+  });
+  syncSell();
+
+  totalHint();
 }
 
 function bindPhases(): void {
@@ -782,7 +1298,10 @@ function boot(): void {
   bindRange('incomeGrowth', true);
   bindRange('cpi', true);
   bindRange('personalInflation', true);
-  bindRange('medInflation', true);
+  // 溢价滑块单独给一个 fmt：只显示「+2.0pp」用户看不出这到底意味着每年涨多少，
+  // 所以把换算后的绝对值一起印出来（换算依赖 cpi，故读 st.input 而不是闭包捕获）。
+  bindRange('medPremium', true,
+    v => `+${v.toFixed(1)}pp（= ${pct(st.input.cpi + v / 100)}）`);
   bindRange('rWork', true);
   bindRange('rRetire', true);
   bindRange('retireSpendRatio', true, v => v.toFixed(0) + '%');
@@ -840,9 +1359,12 @@ function boot(): void {
   smile.addEventListener('change', () => { st.input.smileOn = smile.checked; schedule(); });
 
   bindIncomeModel();
+  bindMarketPresets();
   bindPhases();
   bindEvents();
   bindPension();
+  bindChild();
+  bindHouse();
   bindInfoTips();
 
   // 名义 / 今日购买力切换
@@ -869,7 +1391,7 @@ function boot(): void {
   } catch { /* 忽略 */ }
 
   $('btnReset').addEventListener('click', () => {
-    st = { input: structuredClone(E.DEFAULTS), pension: { ...DEFAULT_PENSION }, showReal: true };
+    st = freshState();
     try { localStorage.removeItem(STORE_KEY); } catch { /* 忽略 */ }
     location.reload();
   });
@@ -887,8 +1409,10 @@ function boot(): void {
     }
     try {
       const p = JSON.parse(box.value) as Partial<State>;
-      if (p.input) st.input = { ...E.DEFAULTS, ...p.input };
+      if (p.input) st.input = migrate({ ...E.DEFAULTS, ...p.input });
       if (p.pension) st.pension = { ...DEFAULT_PENSION, ...p.pension };
+      if (p.child) st.child = { ...CH.DEFAULT_CHILD, ...p.child };
+      if (p.house) st.house = HO.migrateCfg(p.house);
       save(); location.reload();
     } catch { box.value = '// JSON 解析失败，请检查格式\n' + box.value; }
   });
@@ -914,9 +1438,9 @@ function renderSelfTest(): void {
       return Math.abs(s.endNominal - 3 * 180000) < 1e-6;
     }],
     ['实际收益率用除法', () => Math.abs(E.realRate(rate(0.07), rate(0.025)) - 0.0439024390) < 1e-9],
-    ['预留金按医疗通胀', () => {
+    ['预留金按医疗通胀（CPI + 溢价）', () => {
       const s = E.simulate({ currentAge: age(30), deathAge: age(40), reserve: real(100000),
-        medInflation: rate(0.06), cpi: rate(0.02) }, 35);
+        medPremium: rate(0.04), cpi: rate(0.02) }, 35);
       return Math.abs(s.targetNominal - 100000 * Math.pow(1.06, 11)) < 1e-6;
     }],
     ['SWR 随年数变化', () => E.swrBenchmark(30) === 0.035 && E.swrBenchmark(50) === 0.030],
