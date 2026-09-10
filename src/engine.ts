@@ -65,7 +65,14 @@ export const DEFAULTS: FireInput = {
   // 只降一边等于假设「低利率 + 高通胀」的滞胀世界，退休期实际收益会变成负数。
   cpi: rate(0.015),              // 中国 CPI 近 10 年几何均值 1.58%
   personalInflation: rate(0.025),// = CPI + 1pp 个人溢价
-  medInflation: rate(0.06),      // 医疗与整体物价脱钩，不随利率环境调整
+  // 医疗通胀是**相对 CPI 的溢价**，实际使用值 = cpi + medPremium（默认 1.5 + 2.0 = 3.5%）。
+  // 原先写死 6% 的绝对值是错的：在 CPI 1.5% 的世界里它等于假设医疗价格每年超出
+  // 总体物价 4.5pp 连滚 65 年，而本报告能查到的最极端的一条长期序列 ——
+  // 美国养老院 CPI 1978–2024，一个几乎无公共保险覆盖的完全自费市场 —— 也只有 +3.23pp。
+  // 中国「医疗保健」CPI 2016–2025 几何均值 2.24%、同期总体 CPI 1.44%，超额仅 +0.80pp。
+  // 取 2.0pp 的理由见 types.ts 的字段注释与 docs/参数依据.md：这笔钱主体是长期照护，
+  // 价格盯名义工资走 ≈ CPI + realWageGrowth（1.5pp），再留 0.5pp 余量。
+  medPremium: rate(0.020),
   rWork: rate(0.04),
   rRetire: rate(0.03),
   reserve: real(500000),
@@ -81,6 +88,58 @@ export const DEFAULTS: FireInput = {
 /** 实际收益率。必须用除法：r−i 的近似在 40 年尺度上有约 4.5% 的终值误差。 */
 export function realRate(nominalRate: Rate, inflation: Rate): Rate {
   return rate((1 + nominalRate) / (1 + inflation) - 1);
+}
+
+/** 市场假设的情景预设。收益率与两档通胀取自 docs/参数依据.md 汇总表的
+ * 保守 / 默认 / 乐观三列。
+ *
+ * 为什么要打包成档而不是让用户逐个调滑块：这几个数不独立。
+ * 真正决定结果的是**实际**收益率（名义收益 ÷ 通胀），只降收益率不降通胀
+ * 等于假设「低利率 + 高通胀」的滞胀世界，退休期实际收益变成负数，
+ * FIRE 年龄凭空多推 5 年（docs/参数依据.md 有三行对照表）。散着放滑块，
+ * 用户很容易拼出这种自己也没意识到的矛盾假设。
+ *
+ * **医疗通胀不在这四元组里，但仍然会跟着档位变。**它现在是 cpi + medPremium：
+ * 三张卡的轴是利率与通胀环境，cpi 一变医疗通胀就跟着变（保守 4.5% / 中性 3.5% /
+ * 乐观 3.0%）—— 医疗价格与总体物价并未脱钩，见 docs/参数依据.md。
+ * 而 medPremium 属于「医疗体系与照护成本结构」这另一根轴，与利率环境无关，
+ * 三档一律 2.0pp，想调它的人去下面的微调滑块里单独调，那才是它该待的地方。
+ * （旧版本把医疗通胀写成三档同为 6% 的绝对值，那条注释的第一条前提「医疗与整体
+ * 物价脱钩」已被证伪；后两条理由 —— 量级喧宾夺主、保守档无解 —— 在 4.5% 下自动消失。）
+ */
+export interface MarketPreset {
+  key: string;
+  name: string;
+  who: string;
+  cpi: Rate; personalInflation: Rate; rWork: Rate; rRetire: Rate;
+}
+
+export const MARKET_PRESETS: readonly MarketPreset[] = [
+  // 退休期实际收益 −1.45%：本金逐年缩水，靠的是「工作久一点、花少一点」
+  { key: 'conservative', name: '保守', who: '收益跑不赢支出涨幅，退休后实际购买力逐年缩水',
+    cpi: rate(0.025), personalInflation: rate(0.035),
+    rWork: rate(0.03), rRetire: rate(0.02) },
+  // 与 DEFAULTS 逐位相同，否则默认状态下这张卡选不中
+  { key: 'neutral', name: '中性', who: '当前的低利率低通胀世界：国债 1.68%，CPI 近三年贴地',
+    cpi: rate(0.015), personalInflation: rate(0.025),
+    rWork: rate(0.04), rRetire: rate(0.03) },
+  // 退休期实际收益 +2.96%：接近美股长期口径，A 股拿不出同等证据
+  { key: 'optimistic', name: '乐观', who: '权益回到长期均值，通胀继续贴地不反弹',
+    cpi: rate(0.01), personalInflation: rate(0.015),
+    rWork: rate(0.06), rRetire: rate(0.045) }
+];
+
+/** 当前四元组匹配哪一档预设；都不匹配（用户自己微调过）返回 null。
+ * 滑块写回是 `parseFloat(v)/100`，与字面量同为最近可表示的 double，本该恰好相等，
+ * 但留 1e-9 容差挡住 localStorage 往返和将来可能改的写回路径。
+ *
+ * medPremium 不参与比较：它不再是预设携带的字段（三档同为 2.0pp，比较它也区分不出
+ * 档位），而且它属于另一根轴 —— 用户单独调高医疗溢价不该把已选中的市场档位打散。 */
+export function matchMarketPreset(i: FireInput): MarketPreset | null {
+  const eq = (a: number, b: number): boolean => Math.abs(a - b) < 1e-9;
+  return MARKET_PRESETS.find(p =>
+    eq(p.cpi, i.cpi) && eq(p.personalInflation, i.personalInflation)
+    && eq(p.rWork, i.rWork) && eq(p.rRetire, i.rRetire)) ?? null;
 }
 
 /** 返回 age 所处支出段的 drift。段区间左闭右开，age === 段起点归属新段。 */
@@ -211,7 +270,9 @@ export function simulate(
     if (a >= retireAge) realFactor *= (1 + driftFor(a, retireAge, inp.phases, inp.smileOn));
   }
 
-  const targetNominal = inp.reserve * Math.pow(1 + inp.medInflation, n + 1);
+  // 医疗通胀是溢价口径：cpi + medPremium。CPI 一动它就跟着动。
+  const medInflation = inp.cpi + inp.medPremium;
+  const targetNominal = inp.reserve * Math.pow(1 + medInflation, n + 1);
   const last = rows[rows.length - 1];
   const endNominal = last ? (last.endNominal as number) : (inp.assets as number);
 
